@@ -609,6 +609,34 @@
                                     </Grid>
 
                                     <Border
+                                        x:Name="MediaActionBorder"
+                                        Padding="10"
+                                        Background="{StaticResource PanelAltBrush}"
+                                        BorderBrush="{StaticResource LineBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Visibility="Collapsed">
+                                        <Grid ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <ProgressRing
+                                                x:Name="MediaActionRing"
+                                                Width="20"
+                                                Height="20"
+                                                IsActive="False" />
+                                            <TextBlock
+                                                x:Name="MediaActionText"
+                                                Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                Foreground="{StaticResource MutedTextBrush}"
+                                                Text="Media is ready"
+                                                TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Border>
+
+                                    <Border
                                         Padding="10"
                                         Background="{StaticResource PanelAltBrush}"
                                         BorderBrush="#B8D9CA"
@@ -679,7 +707,7 @@
                                             FontSize="12"
                                             Text="No photos yet" />
                                         <ScrollViewer
-                                            MaxHeight="106"
+                                            MaxHeight="146"
                                             HorizontalScrollBarVisibility="Auto"
                                             VerticalScrollBarVisibility="Disabled">
                                             <StackPanel

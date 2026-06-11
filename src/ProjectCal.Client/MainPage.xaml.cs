@@ -213,6 +213,7 @@ public sealed partial class MainPage : Page
             await LoadSelectedMediaAsync(noteId);
             StatusBox.Text = "Photo attached locally.";
             SyncStateText.Text = "Local changes";
+            SetMediaAction("Photo attached locally.", false);
             if (_api.IsSignedIn && GetBoolSetting(AutoSyncMediaSettingKey, false))
             {
                 await SyncNowAsync();
@@ -243,6 +244,7 @@ public sealed partial class MainPage : Page
                 SetRecordButtonContent(Symbol.Stop, "Stop recording");
                 StatusBox.Text = "Recording audio. Press Stop recording when done.";
                 MediaStateText.Text = "Recording";
+                SetMediaAction("Recording audio...", true);
                 await ReloadAsync();
                 return;
             }
@@ -266,6 +268,7 @@ public sealed partial class MainPage : Page
                 : "Audio saved locally. Login to upload it for transcription.";
             SyncStateText.Text = "Local changes";
             TranscriptStateText.Text = _api.IsSignedIn ? "Uploading" : "Needs login";
+            SetMediaAction(_api.IsSignedIn ? "Uploading audio automatically..." : "Audio is saved locally. Login to upload.", _api.IsSignedIn);
             if (_api.IsSignedIn)
             {
                 await SyncNowAsync();
@@ -363,6 +366,7 @@ public sealed partial class MainPage : Page
     private async Task SyncNowAsync()
     {
         SyncStateText.Text = "Syncing";
+        SetMediaAction("Syncing notes and media...", true);
         var dirtyNotes = await _store.GetDirtyNotesAsync();
         var mutations = dirtyNotes.Select(note => new SyncNoteMutation(
             note.DeletedAt is null ? SyncOperation.Upsert : SyncOperation.Delete,
@@ -409,11 +413,13 @@ public sealed partial class MainPage : Page
             StatusBox.Text = $"Uploaded {uploadedMedia} media file(s). Waiting for transcription...";
             MediaStateText.Text = "Uploaded";
             TranscriptStateText.Text = "Processing";
+            SetMediaAction($"Uploaded {uploadedMedia} media file(s). Checking updates...", true);
             await PullTranscriptionUpdatesAsync();
             StatusBox.Text = skippedMedia > 0
                 ? $"Synced. Uploaded {uploadedMedia} media file(s), skipped {skippedMedia} stale file(s)."
                 : "Synced. Uploaded media and checked transcription.";
             SyncStateText.Text = "Done";
+            SetMediaAction("Media synced.", false);
         }
         else
         {
@@ -421,6 +427,7 @@ public sealed partial class MainPage : Page
                 ? $"Synced {response.Notes.Count} notes. Skipped {skippedMedia} stale media file(s)."
                 : $"Synced {response.Notes.Count} notes. Checked transcription updates.";
             SyncStateText.Text = "Done";
+            SetMediaAction("Everything is synced.", false);
         }
 
         await RefreshSelectedNoteDetailsAsync();
@@ -1204,6 +1211,7 @@ public sealed partial class MainPage : Page
             _audioPlayer.Source = MediaSource.CreateFromStorageFile(file);
             _audioPlayer.Play();
             AudioStatusText.Text = $"Playing {_selectedAudioAttachment.FileName}";
+            SetMediaAction("Playing audio.", false);
             StatusBox.Text = "Playing local audio. Use the player controls under the buttons.";
         });
     }
@@ -1218,6 +1226,7 @@ public sealed partial class MainPage : Page
 
         AudioPlayerElement.Visibility = Visibility.Collapsed;
         AudioStatusText.Text = _selectedAudioAttachment is null ? "No audio attached" : $"Ready to play {_selectedAudioAttachment.FileName}";
+        SetMediaAction(_selectedAudioAttachment is null ? "No audio selected." : "Audio ready.", false);
         StatusBox.Text = "Audio stopped.";
     }
 
@@ -1237,6 +1246,7 @@ public sealed partial class MainPage : Page
         AudioStatusText.Text = hasAudio
             ? $"{audioAttachments.Length} audio attached. Ready to play latest."
             : "No audio attached";
+        SetMediaAction(hasAudio ? "Audio ready. Press Play audio." : "Record audio or attach photos to this note.", false);
 
         RenderPhotos(attachments);
         UpdateMediaIndicator(attachments);
@@ -1253,6 +1263,7 @@ public sealed partial class MainPage : Page
         PhotosPanel.Children.Clear();
         PhotoStatusText.Text = "No photos yet";
         MediaStateText.Text = "None";
+        SetMediaAction("Record audio or attach photos to this note.", false);
     }
 
     private async Task RefreshSelectedNoteDetailsAsync()
@@ -1315,6 +1326,19 @@ public sealed partial class MainPage : Page
             (_, 0) => $"{photos} photo",
             _ => $"{photos} photo / {audio} audio"
         };
+    }
+
+    private void SetMediaAction(string message, bool busy)
+    {
+        if (MediaActionBorder is null)
+        {
+            return;
+        }
+
+        MediaActionBorder.Visibility = Visibility.Visible;
+        MediaActionText.Text = message;
+        MediaActionRing.IsActive = busy;
+        MediaActionRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private ComboBox SettingComboBox(string header, (string Label, string Value)[] items, string selectedValue)
@@ -1481,22 +1505,24 @@ public sealed partial class MainPage : Page
             .ToArray();
 
         PhotosPanel.Children.Clear();
-        PhotoStatusText.Text = photos.Length == 0 ? "No photos yet" : $"{photos.Length} photo{(photos.Length == 1 ? "" : "s")} attached";
+        PhotoStatusText.Text = photos.Length == 0
+            ? "No photos yet"
+            : $"{photos.Length} photo{(photos.Length == 1 ? "" : "s")} attached. Click a photo to preview.";
 
         foreach (var photo in photos)
         {
             var image = new Image
             {
-                Width = 86,
-                Height = 86,
+                Width = 112,
+                Height = 96,
                 Stretch = Stretch.UniformToFill,
                 Source = new BitmapImage(new Uri(photo.LocalPath))
             };
 
             var frame = new Border
             {
-                Width = 88,
-                Height = 88,
+                Width = 114,
+                Height = 98,
                 Padding = new Thickness(1),
                 Background = (Brush)Resources["PanelAltBrush"],
                 BorderBrush = (Brush)Resources["LineBrush"],
@@ -1505,21 +1531,40 @@ public sealed partial class MainPage : Page
                 Child = image
             };
 
+            var label = new TextBlock
+            {
+                Text = photo.FileName,
+                MaxWidth = 116,
+                Foreground = (Brush)Resources["MutedTextBrush"],
+                FontSize = 11,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            var content = new StackPanel
+            {
+                Spacing = 5,
+                Children =
+                {
+                    frame,
+                    label
+                }
+            };
+
             var thumbnail = new Button
             {
-                Width = 92,
-                Height = 92,
-                Padding = new Thickness(0),
+                Width = 124,
+                Height = 130,
+                Padding = new Thickness(4),
                 Background = (Brush)Resources["PanelAltBrush"],
                 BorderBrush = (Brush)Resources["LineBrush"],
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(8),
                 Tag = photo,
-                Content = frame
+                Content = content
             };
             thumbnail.Click += PhotoThumbnail_Click;
 
-            ToolTipService.SetToolTip(thumbnail, photo.FileName);
+            ToolTipService.SetToolTip(thumbnail, $"Preview {photo.FileName}");
             PhotosPanel.Children.Add(thumbnail);
         }
     }
@@ -1608,6 +1653,7 @@ public sealed partial class MainPage : Page
         {
             StatusBox.Text = ex.Message;
             SyncStateText.Text = "Issue";
+            SetMediaAction(ex.Message, false);
         }
     }
 
