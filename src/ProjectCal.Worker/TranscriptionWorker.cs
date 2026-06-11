@@ -111,16 +111,17 @@ public sealed class SpeechToTextService(HttpClient httpClient, IConfiguration co
 
     private async Task<string> TranscribeWithOpenAIAsync(string storedPath, string language, string apiKey, CancellationToken cancellationToken)
     {
-        if (!File.Exists(storedPath))
+        var audioPath = ResolveAudioPath(storedPath);
+        if (!File.Exists(audioPath))
         {
-            throw new FileNotFoundException("Audio file was not found.", storedPath);
+            throw new FileNotFoundException("Audio file was not found.", audioPath);
         }
 
         using var form = new MultipartFormDataContent();
-        await using var stream = File.OpenRead(storedPath);
+        await using var stream = File.OpenRead(audioPath);
         using var file = new StreamContent(stream);
-        file.Headers.ContentType = new MediaTypeHeaderValue(GetMimeType(storedPath));
-        form.Add(file, "file", Path.GetFileName(storedPath));
+        file.Headers.ContentType = new MediaTypeHeaderValue(GetMimeType(audioPath));
+        form.Add(file, "file", Path.GetFileName(audioPath));
         form.Add(new StringContent(configuration["OpenAI:TranscriptionModel"] ?? "gpt-4o-mini-transcribe"), "model");
         form.Add(new StringContent("json"), "response_format");
 
@@ -144,6 +145,51 @@ public sealed class SpeechToTextService(HttpClient httpClient, IConfiguration co
 
         using var document = JsonDocument.Parse(body);
         return document.RootElement.TryGetProperty("text", out var text) ? text.GetString() ?? "" : "";
+    }
+
+    private string ResolveAudioPath(string storedPath)
+    {
+        if (Path.IsPathRooted(storedPath))
+        {
+            return storedPath;
+        }
+
+        var normalized = storedPath.Replace('/', Path.DirectorySeparatorChar);
+        var candidates = new List<string>();
+
+        var configuredRoot = configuration["Storage:RootPath"];
+        if (!string.IsNullOrWhiteSpace(configuredRoot))
+        {
+            candidates.Add(Path.Combine(configuredRoot, normalized));
+        }
+
+        candidates.Add(Path.GetFullPath(normalized, Directory.GetCurrentDirectory()));
+        candidates.Add(Path.GetFullPath(normalized, AppContext.BaseDirectory));
+
+        var apiMediaRoot = FindUpwards("src", "ProjectCal.Api", "App_Data", "media");
+        if (apiMediaRoot is not null)
+        {
+            candidates.Add(Path.Combine(apiMediaRoot, normalized));
+        }
+
+        return candidates.FirstOrDefault(File.Exists) ?? candidates.First();
+    }
+
+    private static string? FindUpwards(params string[] pathParts)
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(pathParts).ToArray());
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return null;
     }
 
     private static string GetMimeType(string path)

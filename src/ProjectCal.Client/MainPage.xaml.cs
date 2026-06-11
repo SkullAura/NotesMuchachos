@@ -261,10 +261,12 @@ public sealed partial class MainPage : Page
                 await LoadSelectedMediaAsync(_selectedNoteId.Value);
             }
 
-            StatusBox.Text = "Audio attached locally. Sync uploads it for transcription.";
+            StatusBox.Text = _api.IsSignedIn
+                ? "Audio saved. Uploading for transcription..."
+                : "Audio saved locally. Login to upload it for transcription.";
             SyncStateText.Text = "Local changes";
-            TranscriptStateText.Text = "Needs sync";
-            if (_api.IsSignedIn && GetBoolSetting(AutoSyncMediaSettingKey, false))
+            TranscriptStateText.Text = _api.IsSignedIn ? "Uploading" : "Needs login";
+            if (_api.IsSignedIn)
             {
                 await SyncNowAsync();
             }
