@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ProjectCal.Client (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "ProjectCal.Client (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

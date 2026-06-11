@@ -1,0 +1,34 @@
+# Build outputs
+bin/
+obj/
+TestResults/
+artifacts/
+
+# Local databases and media
+*.db
+*.db-shm
+*.db-wal
+src/ProjectCal.Api/App_Data/
+
+# User and IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Secrets and local env
+.env
+.env.*
+!/.env.example
+appsettings.Local.json
+secrets.json
+
+# Logs
+*.log
+logs/
+
+# OS files
+Thumbs.db
+Desktop.ini

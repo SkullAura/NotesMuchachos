@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-ProjectCal.Worker-1c67ab0a-6f49-453a-ab05-f2622b1fceaf</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProjectCal.Shared\ProjectCal.Shared.csproj" />
+    <ProjectReference Include="..\ProjectCal.Api\ProjectCal.Api.csproj" />
+  </ItemGroup>
+</Project>

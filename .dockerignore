@@ -1,0 +1,6 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+src/ProjectCal.Api/App_Data/
+src/ProjectCal.Api/projectcal-dev.db
