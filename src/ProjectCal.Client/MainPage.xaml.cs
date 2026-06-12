@@ -6,7 +6,10 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Text;
 using ProjectCal.Shared;
 using ProjectCal_Client.Services;
+using System.Diagnostics;
 using System.Globalization;
+using System.Net.Http.Headers;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -30,9 +33,12 @@ public sealed partial class MainPage : Page
     private const string DefaultDurationSettingKey = "settings_default_duration";
     private const string TranscriptionLanguageSettingKey = "settings_transcription_language";
     private const string AutoSyncMediaSettingKey = "settings_auto_sync_media";
+    private const string UpdateBranch = "first-ui-update";
+    private const string UpdateCommitUrl = "https://api.github.com/repos/SkullAura/NotesMuchachos/commits/" + UpdateBranch;
 
     private readonly LocalNoteStore _store = new();
     private readonly ProjectCalApiClient _api = new();
+    private static readonly HttpClient UpdateHttpClient = new();
     private DateTimeOffset? _lastSyncAt;
     private Guid? _selectedNoteId;
     private Guid? _resizeHandlesNoteId;
@@ -62,6 +68,7 @@ public sealed partial class MainPage : Page
     private sealed record ResizeContext(LocalNote Note, FrameworkElement Host, ResizeEdge Edge);
     private sealed record TimelineLayout(LocalNote Note, LocalAttachmentSummary? AttachmentSummary, int Lane, int LaneCount);
     private sealed record StoredRichBody(string Format, string Plain, string Rtf);
+    private sealed record UpdateCheckResult(bool Success, bool UpdateAvailable, string Message, string? LocalSha, string? RemoteSha);
 
     public MainPage()
     {
@@ -335,6 +342,52 @@ public sealed partial class MainPage : Page
             IsOn = GetBoolSetting(AutoSyncMediaSettingKey, false)
         };
 
+        var updateStatusText = new TextBlock
+        {
+            Foreground = (Brush)Resources["MutedTextBrush"],
+            Text = T("updateNotChecked"),
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        var checkUpdatesButton = new Button
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children =
+                {
+                    new SymbolIcon(Symbol.Sync),
+                    new TextBlock { Text = T("checkUpdates") }
+                }
+            }
+        };
+        checkUpdatesButton.Click += async (_, _) =>
+        {
+            checkUpdatesButton.IsEnabled = false;
+            updateStatusText.Text = T("checkingUpdates");
+            var result = await CheckForUpdatesAsync();
+            updateStatusText.Text = result.Message;
+            checkUpdatesButton.IsEnabled = true;
+        };
+
+        var updatePanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = T("updates"),
+                    Foreground = (Brush)Resources["InkBrush"],
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+                },
+                checkUpdatesButton,
+                updateStatusText
+            }
+        };
+
         var panel = new StackPanel
         {
             Spacing = 14,
@@ -345,7 +398,8 @@ public sealed partial class MainPage : Page
                 themeBox,
                 durationBox,
                 transcriptionLanguageBox,
-                autoSyncSwitch
+                autoSyncSwitch,
+                updatePanel
             }
         };
 
@@ -2131,6 +2185,210 @@ public sealed partial class MainPage : Page
         return box;
     }
 
+    private async Task CheckForUpdatesOnStartupAsync()
+    {
+        await Task.Delay(800);
+        var result = await CheckForUpdatesAsync();
+        if (result.Success)
+        {
+            StatusBox.Text = result.Message;
+        }
+    }
+
+    private async Task<UpdateCheckResult> CheckForUpdatesAsync()
+    {
+        try
+        {
+            var (remoteSha, message) = await GetRemoteUpdateRevisionAsync();
+            var shortRemote = ShortSha(remoteSha);
+            var localSha = await TryGetLocalGitShaAsync();
+            var shortLocal = ShortSha(localSha);
+
+            if (string.IsNullOrWhiteSpace(localSha))
+            {
+                return new UpdateCheckResult(
+                    true,
+                    false,
+                    $"{T("latestGithubVersion")}: {shortRemote}. {T("currentBuildUnknown")}",
+                    localSha,
+                    remoteSha);
+            }
+
+            var isCurrent = remoteSha.StartsWith(localSha, StringComparison.OrdinalIgnoreCase)
+                || localSha.StartsWith(remoteSha, StringComparison.OrdinalIgnoreCase);
+
+            return isCurrent
+                ? new UpdateCheckResult(true, false, $"{T("appUpToDate")} {shortLocal}.", localSha, remoteSha)
+                : new UpdateCheckResult(true, true, $"{T("updateAvailable")} {shortLocal} -> {shortRemote}. {message}", localSha, remoteSha);
+        }
+        catch (Exception ex)
+        {
+            return new UpdateCheckResult(false, false, $"{T("updateCheckFailed")}: {ex.Message}", null, null);
+        }
+    }
+
+    private async Task<(string Sha, string Message)> GetRemoteUpdateRevisionAsync()
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, UpdateCommitUrl);
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("ProjectCal", "1.0"));
+            using var response = await UpdateHttpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            await using var stream = await response.Content.ReadAsStreamAsync();
+            using var document = await JsonDocument.ParseAsync(stream);
+            return (
+                document.RootElement.GetProperty("sha").GetString() ?? "",
+                document.RootElement.GetProperty("commit").GetProperty("message").GetString() ?? T("updateFound"));
+        }
+        catch
+        {
+            var gitRemoteSha = await TryGetRemoteGitShaAsync();
+            if (!string.IsNullOrWhiteSpace(gitRemoteSha))
+            {
+                return (gitRemoteSha, T("updateFound"));
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task<string?> TryGetRemoteGitShaAsync()
+    {
+        var root = TryFindGitRoot();
+        if (root is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = @"C:\Program Files\Git\cmd\git.exe",
+                Arguments = $"ls-remote origin refs/heads/{UpdateBranch}",
+                WorkingDirectory = root.FullName,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            process.Start();
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
+            {
+                return null;
+            }
+
+            return output.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static async Task<string?> TryGetLocalGitShaAsync()
+    {
+        var directory = TryFindGitRoot();
+        if (directory is null)
+        {
+            return Assembly.GetExecutingAssembly()
+                .GetCustomAttributes<AssemblyMetadataAttribute>()
+                .FirstOrDefault(x => x.Key == "GitCommit")
+                ?.Value;
+        }
+
+        var gitPath = Path.Combine(directory.FullName, ".git");
+        if (Directory.Exists(gitPath))
+        {
+            return await ReadGitHeadAsync(gitPath);
+        }
+
+        if (File.Exists(gitPath))
+        {
+            var content = await File.ReadAllTextAsync(gitPath);
+            const string gitDirPrefix = "gitdir:";
+            if (content.TrimStart().StartsWith(gitDirPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var relativeGitDir = content[(content.IndexOf(gitDirPrefix, StringComparison.OrdinalIgnoreCase) + gitDirPrefix.Length)..].Trim();
+                var fullGitDir = Path.GetFullPath(relativeGitDir, directory.FullName);
+                return await ReadGitHeadAsync(fullGitDir);
+            }
+        }
+
+        return null;
+    }
+
+    private static DirectoryInfo? TryFindGitRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var gitPath = Path.Combine(directory.FullName, ".git");
+            if (Directory.Exists(gitPath) || File.Exists(gitPath))
+            {
+                return directory;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return null;
+    }
+
+    private static async Task<string?> ReadGitHeadAsync(string gitDirectory)
+    {
+        var headPath = Path.Combine(gitDirectory, "HEAD");
+        if (!File.Exists(headPath))
+        {
+            return null;
+        }
+
+        var head = (await File.ReadAllTextAsync(headPath)).Trim();
+        const string refPrefix = "ref:";
+        if (!head.StartsWith(refPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return head;
+        }
+
+        var reference = head[refPrefix.Length..].Trim().Replace('/', Path.DirectorySeparatorChar);
+        var refPath = Path.Combine(gitDirectory, reference);
+        if (File.Exists(refPath))
+        {
+            return (await File.ReadAllTextAsync(refPath)).Trim();
+        }
+
+        var packedRefsPath = Path.Combine(gitDirectory, "packed-refs");
+        if (!File.Exists(packedRefsPath))
+        {
+            return null;
+        }
+
+        var normalizedReference = reference.Replace(Path.DirectorySeparatorChar, '/');
+        foreach (var line in await File.ReadAllLinesAsync(packedRefsPath))
+        {
+            if (line.StartsWith("#", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var parts = line.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 2 && string.Equals(parts[1], normalizedReference, StringComparison.Ordinal))
+            {
+                return parts[0];
+            }
+        }
+
+        return null;
+    }
+
+    private static string ShortSha(string? sha) =>
+        string.IsNullOrWhiteSpace(sha) ? "unknown" : sha[..Math.Min(7, sha.Length)];
+
     private void ApplyThemeSetting(string theme)
     {
         var dark = string.Equals(theme, "Dark", StringComparison.OrdinalIgnoreCase);
@@ -2426,6 +2684,16 @@ public sealed partial class MainPage : Page
                 "languageUkrainian" => "Украинский",
                 "languageEnglish" => "Английский",
                 "autoSyncMedia" => "Синхронизировать после записи или фото",
+                "updates" => "\u041e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f",
+                "checkUpdates" => "\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f",
+                "updateNotChecked" => "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0435\u0449\u0451 \u043d\u0435 \u0437\u0430\u043f\u0443\u0441\u043a\u0430\u043b\u0430\u0441\u044c.",
+                "checkingUpdates" => "\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u044e GitHub...",
+                "latestGithubVersion" => "\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u044f\u044f \u0432\u0435\u0440\u0441\u0438\u044f \u043d\u0430 GitHub",
+                "currentBuildUnknown" => "\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u043a\u043e\u043c\u043c\u0438\u0442 \u0441\u0431\u043e\u0440\u043a\u0438 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d.",
+                "appUpToDate" => "\u0412\u0435\u0440\u0441\u0438\u044f \u0430\u043a\u0442\u0443\u0430\u043b\u044c\u043d\u0430:",
+                "updateAvailable" => "\u0415\u0441\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435:",
+                "updateFound" => "\u041d\u0430 GitHub \u043d\u0430\u0439\u0434\u0435\u043d\u0430 \u043d\u043e\u0432\u0430\u044f \u0432\u0435\u0440\u0441\u0438\u044f.",
+                "updateCheckFailed" => "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f",
                 "settings" => "Настройки",
                 "save" => "Сохранить",
                 "cancel" => "Отмена",
@@ -2540,6 +2808,16 @@ public sealed partial class MainPage : Page
                 "languageUkrainian" => "Ukrainian",
                 "languageEnglish" => "English",
                 "autoSyncMedia" => "Auto sync after recording or photo",
+                "updates" => "Updates",
+                "checkUpdates" => "Check GitHub updates",
+                "updateNotChecked" => "Update check has not run yet.",
+                "checkingUpdates" => "Checking GitHub...",
+                "latestGithubVersion" => "Latest GitHub version",
+                "currentBuildUnknown" => "Current build commit was not found.",
+                "appUpToDate" => "App is up to date:",
+                "updateAvailable" => "Update available:",
+                "updateFound" => "A newer version was found on GitHub.",
+                "updateCheckFailed" => "Could not check updates",
                 "settings" => "Settings",
                 "save" => "Save",
                 "cancel" => "Cancel",
@@ -2893,5 +3171,6 @@ public sealed partial class MainPage : Page
         UserLabel.Text = _api.CurrentUser?.Email ?? "Calendar-first notes";
         StatusBox.Text = status;
         SyncStateText.Text = _api.IsSignedIn ? T("ready") : T("offline");
+        _ = CheckForUpdatesOnStartupAsync();
     }
 }
