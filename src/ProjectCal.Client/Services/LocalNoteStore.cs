@@ -399,6 +399,55 @@ public sealed class LocalNoteStore
         await command.ExecuteNonQueryAsync();
     }
 
+    public async Task<bool> ApplyServerAttachmentAsync(AttachmentDto attachment, byte[] content)
+    {
+        await using var connection = Open();
+        await connection.OpenAsync();
+
+        var existing = await GetAttachmentAsync(connection, attachment.Id);
+        if (existing is not null && File.Exists(existing.LocalPath))
+        {
+            return false;
+        }
+
+        if (await HasEquivalentAttachmentAsync(connection, attachment))
+        {
+            return false;
+        }
+
+        var extension = Path.GetExtension(attachment.FileName);
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = attachment.Type == AttachmentType.Audio ? ".mp4" : ".jpg";
+        }
+
+        var localPath = Path.Combine(_mediaRoot, $"{attachment.Id:N}{extension}");
+        await File.WriteAllBytesAsync(localPath, content);
+
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO attachments (id, note_id, type, local_path, file_name, mime_type, size, is_uploaded)
+            VALUES ($id, $note_id, $type, $local_path, $file_name, $mime_type, $size, 1)
+            ON CONFLICT(id) DO UPDATE SET
+                note_id = excluded.note_id,
+                type = excluded.type,
+                local_path = excluded.local_path,
+                file_name = excluded.file_name,
+                mime_type = excluded.mime_type,
+                size = excluded.size,
+                is_uploaded = 1
+            """;
+        command.Parameters.AddWithValue("$id", attachment.Id.ToString());
+        command.Parameters.AddWithValue("$note_id", attachment.NoteId.ToString());
+        command.Parameters.AddWithValue("$type", (int)attachment.Type);
+        command.Parameters.AddWithValue("$local_path", localPath);
+        command.Parameters.AddWithValue("$file_name", attachment.FileName);
+        command.Parameters.AddWithValue("$mime_type", attachment.MimeType);
+        command.Parameters.AddWithValue("$size", attachment.Size);
+        await command.ExecuteNonQueryAsync();
+        return true;
+    }
+
     private SqliteConnection Open() => new($"Data Source={_dbPath}");
 
     private static async Task ExecuteAsync(SqliteConnection connection, string sql)
@@ -422,6 +471,36 @@ public sealed class LocalNoteStore
         return await reader.ReadAsync() ? ReadNote(reader) : null;
     }
 
+    private static async Task<LocalAttachment?> GetAttachmentAsync(SqliteConnection connection, Guid id)
+    {
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, note_id, type, local_path, file_name, mime_type, size, is_uploaded
+            FROM attachments
+            WHERE id = $id
+            """;
+        command.Parameters.AddWithValue("$id", id.ToString());
+        await using var reader = await command.ExecuteReaderAsync();
+        return await reader.ReadAsync() ? ReadAttachment(reader) : null;
+    }
+
+    private static async Task<bool> HasEquivalentAttachmentAsync(SqliteConnection connection, AttachmentDto attachment)
+    {
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT 1
+            FROM attachments
+            WHERE note_id = $note_id AND type = $type AND file_name = $file_name AND size = $size
+            LIMIT 1
+            """;
+        command.Parameters.AddWithValue("$note_id", attachment.NoteId.ToString());
+        command.Parameters.AddWithValue("$type", (int)attachment.Type);
+        command.Parameters.AddWithValue("$file_name", attachment.FileName);
+        command.Parameters.AddWithValue("$size", attachment.Size);
+        var result = await command.ExecuteScalarAsync();
+        return result is not null;
+    }
+
     private static LocalNote ReadNote(SqliteDataReader reader)
     {
         return new LocalNote
@@ -439,6 +518,21 @@ public sealed class LocalNoteStore
             IsDirty = reader.GetInt64(10) == 1,
             TranscriptText = reader.IsDBNull(11) ? null : reader.GetString(11),
             TranscriptStatus = (TranscriptStatus)reader.GetInt32(12)
+        };
+    }
+
+    private static LocalAttachment ReadAttachment(SqliteDataReader reader)
+    {
+        return new LocalAttachment
+        {
+            Id = Guid.Parse(reader.GetString(0)),
+            NoteId = Guid.Parse(reader.GetString(1)),
+            Type = (AttachmentType)reader.GetInt32(2),
+            LocalPath = reader.GetString(3),
+            FileName = reader.GetString(4),
+            MimeType = reader.GetString(5),
+            Size = reader.GetInt64(6),
+            IsUploaded = reader.GetInt64(7) == 1
         };
     }
 

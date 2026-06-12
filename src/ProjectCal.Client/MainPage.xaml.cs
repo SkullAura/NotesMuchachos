@@ -459,8 +459,25 @@ public sealed partial class MainPage : Page
             await _store.ApplyServerTranscriptAsync(transcript);
         }
 
-        var uploadedMedia = 0;
+        var downloadedMedia = 0;
         var skippedMedia = 0;
+        foreach (var attachment in response.Attachments)
+        {
+            try
+            {
+                var content = await _api.DownloadAttachmentAsync(attachment.Id);
+                if (await _store.ApplyServerAttachmentAsync(attachment, content))
+                {
+                    downloadedMedia++;
+                }
+            }
+            catch (HttpRequestException)
+            {
+                skippedMedia++;
+            }
+        }
+
+        var uploadedMedia = 0;
         foreach (var attachment in await _store.GetPendingAttachmentsAsync())
         {
             if (!await EnsureServerNoteForAttachmentAsync(attachment.NoteId))
@@ -491,19 +508,27 @@ public sealed partial class MainPage : Page
             TranscriptStateText.Text = "Processing";
             SetMediaAction($"Uploaded {uploadedMedia} media file(s). Checking updates...", true);
             await PullTranscriptionUpdatesAsync();
-            StatusBox.Text = skippedMedia > 0
-                ? $"Synced. Uploaded {uploadedMedia} media file(s), skipped {skippedMedia} stale file(s)."
-                : "Synced. Uploaded media and checked transcription.";
+            StatusBox.Text = (downloadedMedia, skippedMedia) switch
+            {
+                (> 0, > 0) => $"Synced. Uploaded {uploadedMedia}, downloaded {downloadedMedia}, skipped {skippedMedia} media file(s).",
+                (> 0, _) => $"Synced. Uploaded {uploadedMedia} and downloaded {downloadedMedia} media file(s).",
+                (_, > 0) => $"Synced. Uploaded {uploadedMedia} media file(s), skipped {skippedMedia} stale file(s).",
+                _ => "Synced. Uploaded media and checked transcription."
+            };
             SyncStateText.Text = "Done";
             SetMediaAction("Media synced.", false);
         }
         else
         {
-            StatusBox.Text = skippedMedia > 0
-                ? $"Synced {response.Notes.Count} notes. Skipped {skippedMedia} stale media file(s)."
-                : $"Synced {response.Notes.Count} notes. Checked transcription updates.";
+            StatusBox.Text = (downloadedMedia, skippedMedia) switch
+            {
+                (> 0, > 0) => $"Synced {response.Notes.Count} notes. Downloaded {downloadedMedia} media file(s), skipped {skippedMedia}.",
+                (> 0, _) => $"Synced {response.Notes.Count} notes. Downloaded {downloadedMedia} media file(s).",
+                (_, > 0) => $"Synced {response.Notes.Count} notes. Skipped {skippedMedia} stale media file(s).",
+                _ => $"Synced {response.Notes.Count} notes. Checked transcription updates."
+            };
             SyncStateText.Text = "Done";
-            SetMediaAction("Everything is synced.", false);
+            SetMediaAction(downloadedMedia > 0 ? "Downloaded media from your account." : "Everything is synced.", false);
         }
 
         await RefreshSelectedNoteDetailsAsync();

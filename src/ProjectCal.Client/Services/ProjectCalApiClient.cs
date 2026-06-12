@@ -104,6 +104,13 @@ public sealed class ProjectCalApiClient
         await EnsureSuccessAsync(response);
     }
 
+    public async Task<byte[]> DownloadAttachmentAsync(Guid attachmentId)
+    {
+        var response = await _http.GetAsync($"/api/attachments/{attachmentId}/download");
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+
     private void ApplyAuth(AuthResponse auth)
     {
         _accessToken = auth.AccessToken;
