@@ -5,52 +5,62 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    Background="#EEF1EC"
+    Background="#EEF8F7"
     mc:Ignorable="d">
 
     <Page.Resources>
-        <SolidColorBrush x:Key="AppBackgroundBrush" Color="#EEF1EC" />
-        <SolidColorBrush x:Key="PanelBrush" Color="#F7F7F2" />
+        <SolidColorBrush x:Key="AppBackgroundBrush" Color="#EEF8F7" />
+        <SolidColorBrush x:Key="PanelBrush" Color="#F7FCFB" />
         <SolidColorBrush x:Key="PanelAltBrush" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="LineBrush" Color="#E5E2DA" />
-        <SolidColorBrush x:Key="MutedTextBrush" Color="#6F6A62" />
-        <SolidColorBrush x:Key="InkBrush" Color="#211F1B" />
-        <SolidColorBrush x:Key="InputBrush" Color="#141816" />
-        <SolidColorBrush x:Key="InputHoverBrush" Color="#1B211E" />
-        <SolidColorBrush x:Key="InputPressedBrush" Color="#101311" />
-        <SolidColorBrush x:Key="InputTextBrush" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="InputPlaceholderBrush" Color="#AEB7B1" />
-        <SolidColorBrush x:Key="AccentSoftBrush" Color="#DCEFE6" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#317A5B" />
+        <SolidColorBrush x:Key="LineBrush" Color="#D6ECEA" />
+        <SolidColorBrush x:Key="MutedTextBrush" Color="#607370" />
+        <SolidColorBrush x:Key="InkBrush" Color="#183331" />
+        <SolidColorBrush x:Key="InputBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="InputHoverBrush" Color="#F2FBFA" />
+        <SolidColorBrush x:Key="InputPressedBrush" Color="#E6F7F5" />
+        <SolidColorBrush x:Key="InputTextBrush" Color="#183331" />
+        <SolidColorBrush x:Key="InputPlaceholderBrush" Color="#6D8582" />
+        <SolidColorBrush x:Key="AccentSoftBrush" Color="#D8F4F1" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#0E9F9A" />
         <SolidColorBrush x:Key="DangerBrush" Color="#B24A43" />
 
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="{StaticResource InputBrush}" />
             <Setter Property="Foreground" Value="{StaticResource InputTextBrush}" />
             <Setter Property="PlaceholderForeground" Value="{StaticResource InputPlaceholderBrush}" />
-            <Setter Property="BorderBrush" Value="#2D3732" />
+            <Setter Property="BorderBrush" Value="#12413F" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="MinHeight" Value="44" />
             <Setter Property="Padding" Value="12,0,12,0" />
-            <Setter Property="SelectionHighlightColor" Value="#317A5B" />
+            <Setter Property="SelectionHighlightColor" Value="#0E9F9A" />
+        </Style>
+
+        <Style TargetType="RichEditBox">
+            <Setter Property="Background" Value="{StaticResource InputBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InputTextBrush}" />
+            <Setter Property="BorderBrush" Value="#12413F" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="MinHeight" Value="44" />
+            <Setter Property="Padding" Value="12,10,12,10" />
         </Style>
 
         <Style TargetType="PasswordBox">
             <Setter Property="Background" Value="{StaticResource InputBrush}" />
             <Setter Property="Foreground" Value="{StaticResource InputTextBrush}" />
-            <Setter Property="BorderBrush" Value="#2D3732" />
+            <Setter Property="BorderBrush" Value="#12413F" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="MinHeight" Value="44" />
             <Setter Property="Padding" Value="12,0,12,0" />
-            <Setter Property="SelectionHighlightColor" Value="#317A5B" />
+            <Setter Property="SelectionHighlightColor" Value="#0E9F9A" />
         </Style>
 
         <Style TargetType="ComboBox">
             <Setter Property="Background" Value="{StaticResource InputBrush}" />
             <Setter Property="Foreground" Value="{StaticResource InputTextBrush}" />
-            <Setter Property="BorderBrush" Value="#2D3732" />
+            <Setter Property="BorderBrush" Value="#12413F" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="MinHeight" Value="40" />
         </Style>
@@ -58,7 +68,7 @@
         <Style TargetType="DatePicker">
             <Setter Property="Background" Value="{StaticResource InputBrush}" />
             <Setter Property="Foreground" Value="{StaticResource InputTextBrush}" />
-            <Setter Property="BorderBrush" Value="#2D3732" />
+            <Setter Property="BorderBrush" Value="#12413F" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="MinHeight" Value="40" />
         </Style>
@@ -66,7 +76,7 @@
         <Style TargetType="TimePicker">
             <Setter Property="Background" Value="{StaticResource InputBrush}" />
             <Setter Property="Foreground" Value="{StaticResource InputTextBrush}" />
-            <Setter Property="BorderBrush" Value="#2D3732" />
+            <Setter Property="BorderBrush" Value="#12413F" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="MinHeight" Value="40" />
         </Style>
@@ -128,6 +138,7 @@
                             FontWeight="SemiBold"
                             Text="ProjectCal" />
                         <TextBlock
+                            x:Name="AuthSubtitleText"
                             Foreground="{StaticResource MutedTextBrush}"
                             FontSize="14"
                             LineHeight="20"
@@ -138,6 +149,7 @@
                     <StackPanel Grid.Row="1" Spacing="12">
                         <StackPanel Spacing="6">
                             <TextBlock
+                                x:Name="EmailLabel"
                                 Foreground="{StaticResource InkBrush}"
                                 FontSize="13"
                                 FontWeight="SemiBold"
@@ -149,6 +161,7 @@
 
                         <StackPanel Spacing="6">
                             <TextBlock
+                                x:Name="PasswordLabel"
                                 Foreground="{StaticResource InkBrush}"
                                 FontSize="13"
                                 FontWeight="SemiBold"
@@ -160,6 +173,7 @@
 
                         <StackPanel Spacing="6">
                             <TextBlock
+                                x:Name="ResetTokenLabel"
                                 Foreground="{StaticResource InkBrush}"
                                 FontSize="13"
                                 FontWeight="SemiBold"
@@ -178,7 +192,7 @@
                             Foreground="White">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Contact" />
-                                <TextBlock Text="Login" />
+                                <TextBlock x:Name="LoginButtonText" Text="Login" />
                             </StackPanel>
                         </Button>
                         <Button
@@ -187,7 +201,7 @@
                             Click="Register_Click">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="AddFriend" />
-                                <TextBlock Text="Register" />
+                                <TextBlock x:Name="RegisterButtonText" Text="Register" />
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -202,7 +216,7 @@
                             Click="ForgotPassword_Click">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Help" />
-                                <TextBlock Text="Forgot" />
+                                <TextBlock x:Name="ForgotButtonText" Text="Forgot" />
                             </StackPanel>
                         </Button>
                         <Button
@@ -211,7 +225,7 @@
                             Click="ResetPassword_Click">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Repair" />
-                                <TextBlock Text="Reset" />
+                                <TextBlock x:Name="ResetButtonText" Text="Reset" />
                             </StackPanel>
                         </Button>
                     </Grid>
@@ -253,7 +267,8 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="260" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="380" />
+                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="430" />
             </Grid.ColumnDefinitions>
 
             <Border
@@ -290,7 +305,7 @@
                             Foreground="White">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Sync" />
-                                <TextBlock Text="Sync" />
+                                <TextBlock x:Name="SyncButtonText" Text="Sync" />
                             </StackPanel>
                         </Button>
                         <Button
@@ -298,7 +313,7 @@
                             Click="Settings_Click">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Setting" />
-                                <TextBlock Text="Settings" />
+                                <TextBlock x:Name="SettingsButtonText" Text="Settings" />
                             </StackPanel>
                         </Button>
                         <Button
@@ -306,7 +321,7 @@
                             Click="Logout_Click">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Back" />
-                                <TextBlock Text="Logout" />
+                                <TextBlock x:Name="LogoutButtonText" Text="Logout" />
                             </StackPanel>
                         </Button>
                         <Border
@@ -334,6 +349,7 @@
                                     </Border>
                                     <StackPanel Grid.Column="1" Spacing="2">
                                         <TextBlock
+                                            x:Name="ActivityTitleText"
                                             Foreground="{StaticResource InkBrush}"
                                             FontWeight="SemiBold"
                                             Text="Activity" />
@@ -369,15 +385,22 @@
                                                 Foreground="{StaticResource AccentBrush}"
                                                 Glyph="&#xE895;" />
                                             <TextBlock
+                                                x:Name="SyncMetricTitleText"
                                                 Foreground="{StaticResource InkBrush}"
                                                 FontSize="12"
                                                 FontWeight="SemiBold"
-                                                Text="Sync" />
+                                                MaxLines="2"
+                                                Text="Sync"
+                                                TextTrimming="CharacterEllipsis"
+                                                TextWrapping="WrapWholeWords" />
                                             <TextBlock
                                                 x:Name="SyncStateText"
                                                 Foreground="{StaticResource MutedTextBrush}"
                                                 FontSize="11"
-                                                Text="Idle" />
+                                                MaxLines="2"
+                                                Text="Idle"
+                                                TextTrimming="CharacterEllipsis"
+                                                TextWrapping="WrapWholeWords" />
                                         </StackPanel>
                                     </Border>
 
@@ -394,15 +417,22 @@
                                                 Foreground="{StaticResource AccentBrush}"
                                                 Glyph="&#xE8B9;" />
                                             <TextBlock
+                                                x:Name="MediaMetricTitleText"
                                                 Foreground="{StaticResource InkBrush}"
                                                 FontSize="12"
                                                 FontWeight="SemiBold"
-                                                Text="Media" />
+                                                MaxLines="2"
+                                                Text="Media"
+                                                TextTrimming="CharacterEllipsis"
+                                                TextWrapping="WrapWholeWords" />
                                             <TextBlock
                                                 x:Name="MediaStateText"
                                                 Foreground="{StaticResource MutedTextBrush}"
                                                 FontSize="11"
-                                                Text="None" />
+                                                MaxLines="2"
+                                                Text="None"
+                                                TextTrimming="CharacterEllipsis"
+                                                TextWrapping="WrapWholeWords" />
                                         </StackPanel>
                                     </Border>
 
@@ -425,15 +455,22 @@
                                                 Glyph="&#xE8D2;" />
                                             <StackPanel Grid.Column="1" Spacing="2">
                                                 <TextBlock
+                                                    x:Name="TranscriptMetricTitleText"
                                                     Foreground="{StaticResource InkBrush}"
                                                     FontSize="12"
                                                     FontWeight="SemiBold"
-                                                    Text="Transcript" />
+                                                    MaxLines="2"
+                                                    Text="Transcript"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    TextWrapping="WrapWholeWords" />
                                                 <TextBlock
                                                     x:Name="TranscriptStateText"
                                                     Foreground="{StaticResource MutedTextBrush}"
                                                     FontSize="11"
-                                                    Text="No audio" />
+                                                    MaxLines="2"
+                                                    Text="No audio"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    TextWrapping="WrapWholeWords" />
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -465,21 +502,49 @@
 
                         <StackPanel Spacing="2">
                             <TextBlock
+                                x:Name="TimelineTitleText"
                                 Foreground="{StaticResource InkBrush}"
                                 FontSize="22"
                                 FontWeight="SemiBold"
                                 Text="Day timeline" />
                             <TextBlock
+                                x:Name="TimelineSubtitleText"
                                 Foreground="{StaticResource MutedTextBrush}"
                                 FontSize="13"
                                 Text="Focus on one day, one hour at a time" />
                         </StackPanel>
 
-                        <DatePicker
-                            x:Name="DayPicker"
+                        <StackPanel
                             Grid.Column="1"
-                            DateChanged="DayPicker_DateChanged"
-                            Header="Day" />
+                            Spacing="4">
+                            <TextBlock
+                                x:Name="DayPickerHeaderText"
+                                Foreground="{StaticResource InkBrush}"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Text="Day" />
+                            <Grid ColumnSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                    <ColumnDefinition Width="82" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox
+                                    x:Name="MonthBox"
+                                    HorizontalAlignment="Stretch"
+                                    SelectionChanged="DateSelector_SelectionChanged" />
+                                <ComboBox
+                                    x:Name="DayBox"
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Stretch"
+                                    SelectionChanged="DateSelector_SelectionChanged" />
+                                <ComboBox
+                                    x:Name="YearBox"
+                                    Grid.Column="2"
+                                    HorizontalAlignment="Stretch"
+                                    SelectionChanged="DateSelector_SelectionChanged" />
+                            </Grid>
+                        </StackPanel>
                         <TextBox
                             x:Name="SearchBox"
                             Grid.Column="2"
@@ -504,6 +569,42 @@
 
             <Border
                 Grid.Column="2"
+                Padding="16"
+                Background="{StaticResource PanelBrush}"
+                BorderBrush="{StaticResource LineBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock
+                            x:Name="AllNotesTitleText"
+                            Foreground="{StaticResource InkBrush}"
+                            FontSize="21"
+                            FontWeight="SemiBold"
+                            Text="All notes" />
+                        <TextBlock
+                            x:Name="AllNotesSubtitleText"
+                            Foreground="{StaticResource MutedTextBrush}"
+                            FontSize="12"
+                            Text="Open any note as a full canvas"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ScrollViewer Grid.Row="1">
+                        <StackPanel
+                            x:Name="AllNotesPanel"
+                            Spacing="6" />
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <Border
+                Grid.Column="3"
                 Padding="18"
                 Background="{StaticResource PanelAltBrush}"
                 BorderBrush="{StaticResource LineBrush}"
@@ -518,11 +619,13 @@
 
                     <StackPanel Spacing="4">
                         <TextBlock
+                            x:Name="NotePanelTitleText"
                             Foreground="{StaticResource InkBrush}"
                             FontSize="22"
                             FontWeight="SemiBold"
                             Text="Note" />
                         <TextBlock
+                            x:Name="NotePanelSubtitleText"
                             Foreground="{StaticResource MutedTextBrush}"
                             FontSize="13"
                             Text="Write, attach photos, or record audio" />
@@ -530,7 +633,7 @@
 
                     <ScrollViewer Grid.Row="1">
                         <StackPanel Spacing="14">
-                            <Grid ColumnSpacing="10">
+                            <Grid ColumnSpacing="10" Visibility="Collapsed">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="*" />
@@ -549,54 +652,36 @@
                             <Border
                                 Padding="14"
                                 Background="{StaticResource AccentSoftBrush}"
-                                BorderBrush="#B8D9CA"
+                                BorderBrush="#A8E3DF"
                                 BorderThickness="1"
                                 CornerRadius="8">
                                 <StackPanel Spacing="12">
                                     <StackPanel Spacing="8">
                                         <StackPanel Spacing="2">
                                             <TextBlock
+                                                x:Name="VoiceMediaTitleText"
                                                 Foreground="{StaticResource InkBrush}"
                                                 FontSize="15"
                                                 FontWeight="SemiBold"
                                                 Text="Voice &amp; media" />
                                             <TextBlock
+                                                x:Name="VoiceMediaSubtitleText"
                                                 Foreground="{StaticResource MutedTextBrush}"
                                                 FontSize="12"
                                                 MaxLines="2"
                                                 Text="Record audio or attach photos."
                                                 TextWrapping="Wrap" />
                                         </StackPanel>
-                                        <Grid ColumnSpacing="8">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <ComboBox
-                                                x:Name="LanguageBox"
-                                                Width="88"
-                                                SelectedIndex="0">
-                                                <ComboBoxItem Content="auto" />
-                                                <ComboBoxItem Content="ru" />
-                                                <ComboBoxItem Content="uk" />
-                                                <ComboBoxItem Content="en" />
-                                            </ComboBox>
-                                            <TextBlock
-                                                Grid.Column="1"
-                                                VerticalAlignment="Center"
-                                                Foreground="{StaticResource MutedTextBrush}"
-                                                FontSize="12"
-                                                MaxLines="2"
-                                                Text="Language for future transcripts"
-                                                TextWrapping="Wrap" />
-                                        </Grid>
+                                        <TextBlock
+                                            x:Name="TranscriptionLanguageSummaryText"
+                                            Foreground="{StaticResource MutedTextBrush}"
+                                            FontSize="12"
+                                            MaxLines="2"
+                                            Text="Transcript language is set in Settings"
+                                            TextWrapping="Wrap" />
                                     </StackPanel>
 
-                                    <Grid ColumnSpacing="10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="8">
                                         <Button
                                             x:Name="RecordButton"
                                             HorizontalAlignment="Stretch"
@@ -605,19 +690,24 @@
                                             Foreground="White">
                                             <StackPanel Orientation="Horizontal" Spacing="8">
                                                 <SymbolIcon Symbol="Microphone" />
-                                                <TextBlock Text="Record audio" />
+                                                <TextBlock
+                                                    x:Name="RecordButtonText"
+                                                    Text="Record audio"
+                                                    TextWrapping="NoWrap" />
                                             </StackPanel>
                                         </Button>
                                         <Button
-                                            Grid.Column="1"
                                             HorizontalAlignment="Stretch"
                                             Click="AttachPhoto_Click">
                                             <StackPanel Orientation="Horizontal" Spacing="8">
                                                 <SymbolIcon Symbol="Pictures" />
-                                                <TextBlock Text="Add photo" />
+                                                <TextBlock
+                                                    x:Name="AddPhotoButtonText"
+                                                    Text="Add photo"
+                                                    TextWrapping="NoWrap" />
                                             </StackPanel>
                                         </Button>
-                                    </Grid>
+                                    </StackPanel>
 
                                     <Border
                                         x:Name="MediaActionBorder"
@@ -651,7 +741,7 @@
                                     <Border
                                         Padding="10"
                                         Background="{StaticResource PanelAltBrush}"
-                                        BorderBrush="#B8D9CA"
+                                        BorderBrush="#A8E3DF"
                                         BorderThickness="1"
                                         CornerRadius="8">
                                         <StackPanel Spacing="8">
@@ -689,7 +779,7 @@
                                                     IsEnabled="False">
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                                         <SymbolIcon Symbol="Play" />
-                                                        <TextBlock Text="Play audio" />
+                                                        <TextBlock x:Name="PlayAudioButtonText" Text="Play audio" />
                                                     </StackPanel>
                                                 </Button>
                                                 <Button
@@ -700,7 +790,7 @@
                                                     IsEnabled="False">
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                                         <SymbolIcon Symbol="Stop" />
-                                                        <TextBlock Text="Stop" />
+                                                        <TextBlock x:Name="StopAudioButtonText" Text="Stop" />
                                                     </StackPanel>
                                                 </Button>
                                             </Grid>
@@ -734,7 +824,7 @@
                                     <Border
                                         Padding="10"
                                         Background="{StaticResource PanelAltBrush}"
-                                        BorderBrush="#B8D9CA"
+                                        BorderBrush="#A8E3DF"
                                         BorderThickness="1"
                                         CornerRadius="8">
                                         <StackPanel Spacing="8">
@@ -771,13 +861,73 @@
                                 x:Name="TitleBox"
                                 Header="Title"
                                 PlaceholderText="Meeting, idea, call..." />
-                            <TextBox
+                            <RichEditBox
                                 x:Name="BodyBox"
                                 MinHeight="280"
-                                AcceptsReturn="True"
                                 Header="Text"
                                 PlaceholderText="Start typing..."
-                                TextWrapping="Wrap" />
+                                TextWrapping="Wrap">
+                                <RichEditBox.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem
+                                            x:Name="BoldMenuItem"
+                                            Click="BoldText_Click"
+                                            Text="Bold" />
+                                        <MenuFlyoutItem
+                                            x:Name="ItalicMenuItem"
+                                            Click="ItalicText_Click"
+                                            Text="Italic" />
+                                        <MenuFlyoutItem
+                                            x:Name="HeadingMenuItem"
+                                            Click="HeadingText_Click"
+                                            Text="Heading" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem
+                                            x:Name="BulletedListMenuItem"
+                                            Click="BulletedList_Click"
+                                            Text="Bulleted list" />
+                                        <MenuFlyoutItem
+                                            x:Name="NumberedListMenuItem"
+                                            Click="NumberedList_Click"
+                                            Text="Numbered list" />
+                                        <MenuFlyoutItem
+                                            x:Name="ChecklistMenuItem"
+                                            Click="Checklist_Click"
+                                            Text="Checklist" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem
+                                            x:Name="QuoteMenuItem"
+                                            Click="QuoteText_Click"
+                                            Text="Quote" />
+                                        <MenuFlyoutItem
+                                            x:Name="CodeMenuItem"
+                                            Click="CodeText_Click"
+                                            Text="Code" />
+                                        <MenuFlyoutItem
+                                            x:Name="LinkMenuItem"
+                                            Click="LinkText_Click"
+                                            Text="Link" />
+                                        <MenuFlyoutItem
+                                            x:Name="TableMenuItem"
+                                            Click="TableText_Click"
+                                            Text="Table" />
+                                    </MenuFlyout>
+                                </RichEditBox.ContextFlyout>
+                                <RichEditBox.KeyboardAccelerators>
+                                    <KeyboardAccelerator
+                                        Invoked="BoldText_Invoked"
+                                        Key="B"
+                                        Modifiers="Control" />
+                                    <KeyboardAccelerator
+                                        Invoked="ItalicText_Invoked"
+                                        Key="I"
+                                        Modifiers="Control" />
+                                    <KeyboardAccelerator
+                                        Invoked="LinkText_Invoked"
+                                        Key="K"
+                                        Modifiers="Control" />
+                                </RichEditBox.KeyboardAccelerators>
+                            </RichEditBox>
                         </StackPanel>
                     </ScrollViewer>
 
@@ -792,7 +942,7 @@
                             ToolTipService.ToolTip="Start a separate new note">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Add" />
-                                <TextBlock Text="New" />
+                                <TextBlock x:Name="NewNoteButtonText" Text="New" />
                             </StackPanel>
                         </Button>
                         <Button
@@ -803,7 +953,7 @@
                             Foreground="White">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Save" />
-                                <TextBlock Text="Save note" />
+                                <TextBlock x:Name="SaveNoteButtonText" Text="Save note" />
                             </StackPanel>
                         </Button>
                         <Button
@@ -815,7 +965,7 @@
                             ToolTipService.ToolTip="Delete selected note">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Delete" />
-                                <TextBlock Text="Delete" />
+                                <TextBlock x:Name="DeleteNoteButtonText" Text="Delete" />
                             </StackPanel>
                         </Button>
                     </Grid>

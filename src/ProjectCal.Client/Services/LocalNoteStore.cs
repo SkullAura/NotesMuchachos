@@ -80,6 +80,29 @@ public sealed class LocalNoteStore
         return notes;
     }
 
+    public async Task<IReadOnlyList<LocalNote>> GetAllNotesAsync()
+    {
+        await using var connection = Open();
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, title, body, date, start_time, end_time, created_at, updated_at, deleted_at,
+                   sync_version, is_dirty, transcript_text, transcript_status
+            FROM notes
+            WHERE deleted_at IS NULL
+            ORDER BY date DESC, start_time ASC
+            """;
+
+        var notes = new List<LocalNote>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            notes.Add(ReadNote(reader));
+        }
+
+        return notes;
+    }
+
     public async Task<LocalNote> UpsertNoteAsync(Guid? id, string title, string body, DateOnly date, TimeOnly startTime, TimeOnly? endTime)
     {
         var now = DateTimeOffset.UtcNow;

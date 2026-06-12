@@ -3,8 +3,14 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Text;
 using ProjectCal.Shared;
 using ProjectCal_Client.Services;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Windows.Globalization;
 using Windows.Media.Capture;
 using Windows.Media.Core;
 using Windows.Media.MediaProperties;
@@ -20,6 +26,7 @@ namespace ProjectCal_Client;
 public sealed partial class MainPage : Page
 {
     private const string ThemeSettingKey = "settings_theme";
+    private const string AppLanguageSettingKey = "settings_app_language";
     private const string DefaultDurationSettingKey = "settings_default_duration";
     private const string TranscriptionLanguageSettingKey = "settings_transcription_language";
     private const string AutoSyncMediaSettingKey = "settings_auto_sync_media";
@@ -28,6 +35,8 @@ public sealed partial class MainPage : Page
     private readonly ProjectCalApiClient _api = new();
     private DateTimeOffset? _lastSyncAt;
     private Guid? _selectedNoteId;
+    private Guid? _resizeHandlesNoteId;
+    private DateOnly _selectedDate = DateOnly.FromDateTime(DateTime.Now);
     private MediaCapture? _mediaCapture;
     private MediaPlayer? _audioPlayer;
     private StorageFile? _recordingFile;
@@ -39,6 +48,7 @@ public sealed partial class MainPage : Page
     private int _resizeOriginalEndMinutes;
     private double _resizeStartY;
     private bool _isRecording;
+    private bool _isUpdatingDateSelector;
 
     private const double HourHeight = 118;
     private const double MinuteHeight = HourHeight / 60.0;
@@ -51,32 +61,33 @@ public sealed partial class MainPage : Page
 
     private sealed record ResizeContext(LocalNote Note, FrameworkElement Host, ResizeEdge Edge);
     private sealed record TimelineLayout(LocalNote Note, LocalAttachmentSummary? AttachmentSummary, int Lane, int LaneCount);
+    private sealed record StoredRichBody(string Format, string Plain, string Rtf);
 
     public MainPage()
     {
         InitializeComponent();
         ApplyThemeSetting(GetStringSetting(ThemeSettingKey, "Light"));
+        ApplyLanguageSetting(GetStringSetting(AppLanguageSettingKey, "en"));
         _audioPlayer = CreateAudioPlayer();
         AudioPlayerElement.SetMediaPlayer(_audioPlayer);
-        DayPicker.Date = DateTimeOffset.Now;
+        SetSelectedDate(DateOnly.FromDateTime(DateTime.Now), reload: false);
         StartTimePicker.Time = TimeSpan.FromHours(DateTimeOffset.Now.Hour);
         EndTimePicker.Time = TimeOnly.FromTimeSpan(StartTimePicker.Time).AddMinutes(GetDefaultDurationMinutes()).ToTimeSpan();
-        SetLanguageBoxValue(GetStringSetting(TranscriptionLanguageSettingKey, "auto"));
         Loaded += MainPage_Loaded;
     }
 
     private async void MainPage_Loaded(object sender, RoutedEventArgs e)
     {
         await _store.InitializeAsync();
-        AuthStatusBox.Text = "Checking saved session...";
+        AuthStatusBox.Text = T("checkingSession");
         if (await _api.TryRestoreSessionAsync())
         {
-            OpenAppShell("Welcome back. Your device is remembered.");
+            OpenAppShell(T("welcomeBack"));
             await ReloadAsync();
             return;
         }
 
-        AuthStatusBox.Text = "Register once, then login. This device will be remembered.";
+        AuthStatusBox.Text = T("registerOnce");
     }
 
     private async void Register_Click(object sender, RoutedEventArgs e)
@@ -85,7 +96,7 @@ public sealed partial class MainPage : Page
         {
             var result = await _api.RegisterAsync(EmailBox.Text, PasswordBox.Password);
             TokenBox.Text = result.DevelopmentEmailToken ?? "";
-            AuthStatusBox.Text = "Account created. Press Login to open the app.";
+            AuthStatusBox.Text = T("accountCreated");
         });
     }
 
@@ -94,7 +105,7 @@ public sealed partial class MainPage : Page
         await RunAuthAsync(async () =>
         {
             await _api.LoginAsync(EmailBox.Text, PasswordBox.Password);
-            OpenAppShell("Signed in. This device will be remembered.");
+            OpenAppShell(T("signedInRemembered"));
             await ReloadAsync();
         });
     }
@@ -103,10 +114,11 @@ public sealed partial class MainPage : Page
     {
         _api.Logout();
         _selectedNoteId = null;
+        _resizeHandlesNoteId = null;
         ClearMediaState();
         AuthScreen.Visibility = Visibility.Visible;
         AppShell.Visibility = Visibility.Collapsed;
-        AuthStatusBox.Text = "Logged out. Login again to remember this device.";
+        AuthStatusBox.Text = T("loggedOut");
         await ReloadAsync();
     }
 
@@ -115,7 +127,7 @@ public sealed partial class MainPage : Page
         await RunAuthAsync(async () =>
         {
             TokenBox.Text = await _api.ForgotPasswordAsync(EmailBox.Text) ?? "";
-            AuthStatusBox.Text = "Password reset token created for development.";
+            AuthStatusBox.Text = T("resetTokenCreated");
         });
     }
 
@@ -124,7 +136,7 @@ public sealed partial class MainPage : Page
         await RunAuthAsync(async () =>
         {
             await _api.ResetPasswordAsync(EmailBox.Text, TokenBox.Text, PasswordBox.Password);
-            AuthStatusBox.Text = "Password changed. You can log in now.";
+            AuthStatusBox.Text = T("passwordChanged");
         });
     }
 
@@ -135,7 +147,7 @@ public sealed partial class MainPage : Page
             var note = await _store.UpsertNoteAsync(
                 _selectedNoteId,
                 TitleBox.Text,
-                BodyBox.Text,
+                GetBodyContent(),
                 SelectedDate(),
                 TimeOnly.FromTimeSpan(StartTimePicker.Time),
                 TimeOnly.FromTimeSpan(EndTimePicker.Time));
@@ -181,8 +193,9 @@ public sealed partial class MainPage : Page
         {
             await _store.DeleteNoteAsync(_selectedNoteId.Value);
             _selectedNoteId = null;
+            _resizeHandlesNoteId = null;
             TitleBox.Text = "";
-            BodyBox.Text = "";
+            SetBodyContent("");
             ClearMediaState();
             SetTranscriptState(null);
             StatusBox.Text = "Deleted locally. Sync will remove it from the server.";
@@ -242,8 +255,8 @@ public sealed partial class MainPage : Page
                 _recordingFile = await folder.CreateFileAsync($"{Guid.NewGuid():N}.m4a", CreationCollisionOption.GenerateUniqueName);
                 await _mediaCapture.StartRecordToStorageFileAsync(MediaEncodingProfile.CreateM4a(AudioEncodingQuality.Auto), _recordingFile);
                 _isRecording = true;
-                SetRecordButtonContent(Symbol.Stop, "Stop recording");
-                StatusBox.Text = "Recording audio. Press Stop recording when done.";
+                SetRecordButtonContent(Symbol.Stop, T("stopRecording"));
+                StatusBox.Text = T("recordingStarted");
                 MediaStateText.Text = "Recording";
                 SetMediaAction("Recording audio...", true);
                 await ReloadAsync();
@@ -254,7 +267,7 @@ public sealed partial class MainPage : Page
             _mediaCapture.Dispose();
             _mediaCapture = null;
             _isRecording = false;
-            SetRecordButtonContent(Symbol.Microphone, "Record audio");
+            SetRecordButtonContent(Symbol.Microphone, T("recordAudio"));
 
             var recordedFile = _recordingFile;
             _recordingFile = null;
@@ -292,28 +305,33 @@ public sealed partial class MainPage : Page
 
     private async void Settings_Click(object sender, RoutedEventArgs e)
     {
-        var themeBox = SettingComboBox("Theme", [
-            ("Light", "Light"),
-            ("Dark", "Dark")
+        var appLanguageBox = SettingComboBox(T("appLanguage"), [
+            ("English", "en"),
+            ("Русский", "ru")
+        ], NormalizeAppLanguage(GetStringSetting(AppLanguageSettingKey, "en")));
+
+        var themeBox = SettingComboBox(T("theme"), [
+            (T("themeLight"), "Light"),
+            (T("themeDark"), "Dark")
         ], GetStringSetting(ThemeSettingKey, "Light"));
 
-        var durationBox = SettingComboBox("Default note length", [
-            ("30 minutes", "30"),
-            ("1 hour", "60"),
-            ("1.5 hours", "90"),
-            ("2 hours", "120")
+        var durationBox = SettingComboBox(T("defaultNoteLength"), [
+            (T("duration30"), "30"),
+            (T("duration60"), "60"),
+            (T("duration90"), "90"),
+            (T("duration120"), "120")
         ], GetDefaultDurationMinutes().ToString());
 
-        var languageBox = SettingComboBox("Transcription language", [
-            ("Auto", "auto"),
-            ("Russian", "ru"),
-            ("Ukrainian", "uk"),
-            ("English", "en")
+        var transcriptionLanguageBox = SettingComboBox(T("transcriptionLanguage"), [
+            (T("languageAuto"), "auto"),
+            (T("languageRussian"), "ru"),
+            (T("languageUkrainian"), "uk"),
+            (T("languageEnglish"), "en")
         ], GetStringSetting(TranscriptionLanguageSettingKey, "auto"));
 
         var autoSyncSwitch = new ToggleSwitch
         {
-            Header = "Auto sync after recording or photo",
+            Header = T("autoSyncMedia"),
             IsOn = GetBoolSetting(AutoSyncMediaSettingKey, false)
         };
 
@@ -323,9 +341,10 @@ public sealed partial class MainPage : Page
             MinWidth = 360,
             Children =
             {
+                appLanguageBox,
                 themeBox,
                 durationBox,
-                languageBox,
+                transcriptionLanguageBox,
                 autoSyncSwitch
             }
         };
@@ -333,10 +352,10 @@ public sealed partial class MainPage : Page
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = "Settings",
+            Title = T("settings"),
             Content = panel,
-            PrimaryButtonText = "Save",
-            CloseButtonText = "Cancel",
+            PrimaryButtonText = T("save"),
+            CloseButtonText = T("cancel"),
             DefaultButton = ContentDialogButton.Primary
         };
 
@@ -345,23 +364,25 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        var appLanguage = NormalizeAppLanguage(SelectedTag(appLanguageBox, "en"));
         var theme = SelectedTag(themeBox, "Light");
         var duration = SelectedTag(durationBox, "60");
-        var language = SelectedTag(languageBox, "auto");
+        var transcriptionLanguage = SelectedTag(transcriptionLanguageBox, "auto");
 
+        SetSetting(AppLanguageSettingKey, appLanguage);
         SetSetting(ThemeSettingKey, theme);
         SetSetting(DefaultDurationSettingKey, duration);
-        SetSetting(TranscriptionLanguageSettingKey, language);
+        SetSetting(TranscriptionLanguageSettingKey, transcriptionLanguage);
         SetSetting(AutoSyncMediaSettingKey, autoSyncSwitch.IsOn);
 
         ApplyThemeSetting(theme);
-        SetLanguageBoxValue(language);
+        ApplyLanguageSetting(appLanguage);
         if (_selectedNoteId is null)
         {
             EndTimePicker.Time = TimeOnly.FromTimeSpan(StartTimePicker.Time).AddMinutes(GetDefaultDurationMinutes()).ToTimeSpan();
         }
 
-        StatusBox.Text = "Settings saved.";
+        StatusBox.Text = T("settingsSaved");
     }
 
     private async Task SyncNowAsync()
@@ -486,8 +507,18 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private async void DayPicker_DateChanged(object sender, DatePickerValueChangedEventArgs e)
+    private async void DateSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_isUpdatingDateSelector)
+        {
+            return;
+        }
+
+        var year = SelectedInt(YearBox, _selectedDate.Year);
+        var month = SelectedInt(MonthBox, _selectedDate.Month);
+        var maxDay = DateTime.DaysInMonth(year, month);
+        var day = Math.Clamp(SelectedInt(DayBox, _selectedDate.Day), 1, maxDay);
+        SetSelectedDate(new DateOnly(year, month, day), reload: false);
         await ReloadAsync();
     }
 
@@ -505,14 +536,167 @@ public sealed partial class MainPage : Page
 
         var notes = await _store.GetNotesAsync(SelectedDate(), SearchBox?.Text);
         var attachmentSummaries = await _store.GetAttachmentSummariesForNotesAsync(notes.Select(x => x.Id));
-        if (notes.Count == 1 && (_selectedNoteId is null || notes.All(x => x.Id != _selectedNoteId)))
-        {
-            SelectNote(notes[0], "Selected the only note on this day.");
-            await LoadSelectedMediaAsync(notes[0].Id);
-        }
 
         HoursPanel.Children.Clear();
         HoursPanel.Children.Add(BuildDayTimeline(notes, attachmentSummaries));
+        await RefreshAllNotesPanelAsync();
+    }
+
+    private async Task RefreshAllNotesPanelAsync()
+    {
+        if (AllNotesPanel is null)
+        {
+            return;
+        }
+
+        var notes = await _store.GetAllNotesAsync();
+        var attachmentSummaries = await _store.GetAttachmentSummariesForNotesAsync(notes.Select(x => x.Id));
+        AllNotesPanel.Children.Clear();
+
+        if (notes.Count == 0)
+        {
+            AllNotesPanel.Children.Add(new TextBlock
+            {
+                Text = T("noNotesYet"),
+                Foreground = (Brush)Resources["MutedTextBrush"],
+                TextWrapping = TextWrapping.Wrap
+            });
+            return;
+        }
+
+        DateOnly? currentDate = null;
+        foreach (var note in notes)
+        {
+            if (currentDate != note.Date)
+            {
+                currentDate = note.Date;
+                AllNotesPanel.Children.Add(new TextBlock
+                {
+                    Text = note.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    Foreground = (Brush)Resources["MutedTextBrush"],
+                    FontSize = 12,
+                    Margin = new Thickness(2, currentDate == notes[0].Date ? 0 : 10, 0, 2)
+                });
+            }
+
+            attachmentSummaries.TryGetValue(note.Id, out var attachmentSummary);
+            AllNotesPanel.Children.Add(BuildAllNoteButton(note, attachmentSummary));
+        }
+    }
+
+    private Button BuildAllNoteButton(LocalNote note, LocalAttachmentSummary? attachmentSummary)
+    {
+        var isSelected = _selectedNoteId == note.Id;
+        var title = string.IsNullOrWhiteSpace(note.Title) ? T("untitledNote") : note.Title;
+        var bodyPreview = PlainTextFromStoredBody(note.Body);
+        var preview = !string.IsNullOrWhiteSpace(bodyPreview)
+            ? bodyPreview
+            : !string.IsNullOrWhiteSpace(note.TranscriptText)
+                ? note.TranscriptText
+                : T("noTextYet");
+
+        var content = new Grid
+        {
+            ColumnSpacing = 8
+        };
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(4) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        content.Children.Add(new Border
+        {
+            Background = (Brush)Resources[isSelected ? "AccentBrush" : "AccentSoftBrush"],
+            CornerRadius = new CornerRadius(3)
+        });
+
+        var textStack = new StackPanel
+        {
+            Spacing = 3
+        };
+        Grid.SetColumn(textStack, 1);
+        content.Children.Add(textStack);
+
+        textStack.Children.Add(new TextBlock
+        {
+            Text = title,
+            Foreground = (Brush)Resources["InkBrush"],
+            FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            MaxLines = 1,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        });
+
+        textStack.Children.Add(new TextBlock
+        {
+            Text = $"{note.StartTime:HH:mm}  {preview}",
+            Foreground = (Brush)Resources["MutedTextBrush"],
+            FontSize = 12,
+            MaxLines = 2,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        var mediaText = AllNoteMediaText(attachmentSummary);
+        if (!string.IsNullOrWhiteSpace(mediaText))
+        {
+            textStack.Children.Add(new TextBlock
+            {
+                Text = mediaText,
+                Foreground = (Brush)Resources["MutedTextBrush"],
+                FontSize = 11,
+                Opacity = 0.8,
+                MaxLines = 1,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            });
+        }
+
+        var button = new Button
+        {
+            Padding = new Thickness(10, 8, 10, 8),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Background = (Brush)Resources[isSelected ? "AccentSoftBrush" : "PanelAltBrush"],
+            BorderBrush = (Brush)Resources[isSelected ? "AccentBrush" : "LineBrush"],
+            BorderThickness = new Thickness(isSelected ? 2 : 1),
+            CornerRadius = new CornerRadius(8),
+            Tag = note,
+            Content = content
+        };
+        button.Click += AllNoteButton_Click;
+        return button;
+    }
+
+    private string AllNoteMediaText(LocalAttachmentSummary? attachmentSummary)
+    {
+        if (attachmentSummary is null)
+        {
+            return "";
+        }
+
+        var parts = new List<string>();
+        if (attachmentSummary.PhotoCount > 0)
+        {
+            parts.Add($"{attachmentSummary.PhotoCount} {T("photo")}");
+        }
+
+        if (attachmentSummary.AudioCount > 0)
+        {
+            parts.Add($"{attachmentSummary.AudioCount} {T("audio")}");
+        }
+
+        return string.Join(" / ", parts);
+    }
+
+    private async void AllNoteButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: LocalNote note })
+        {
+            return;
+        }
+
+        SetSelectedDate(note.Date, reload: false);
+        SelectNote(note, $"{T("openedNote")} {note.Title}.");
+        await LoadSelectedMediaAsync(note.Id);
+        await ReloadAsync();
     }
 
     private FrameworkElement BuildDayTimeline(
@@ -581,6 +765,7 @@ public sealed partial class MainPage : Page
                 Tag = hour,
                 Content = new Border()
             };
+            slot.Click += EmptyHour_Click;
             slot.DoubleTapped += EmptyHour_DoubleTapped;
             Grid.SetRow(slot, hour);
             slotGrid.Children.Add(slot);
@@ -703,9 +888,12 @@ public sealed partial class MainPage : Page
         Brush lineBrush)
     {
         var isSelected = _selectedNoteId == note.Id;
+        var hasResizeHandles = _resizeHandlesNoteId == note.Id;
         var startMinute = NoteStartMinute(note);
         var endMinute = NoteEndMinute(note);
         var height = Math.Max(54, (endMinute - startMinute) * MinuteHeight);
+        var bodyText = PlainTextFromStoredBody(note.Body);
+        var bodyMaxLines = Math.Max(1, (int)Math.Floor(Math.Max(18, height - 52) / 18));
 
         var host = new Grid
         {
@@ -726,28 +914,36 @@ public sealed partial class MainPage : Page
             CornerRadius = new CornerRadius(3)
         });
 
-        var copy = new StackPanel
+        var copy = new Grid
         {
-            Spacing = 4,
+            Height = Math.Max(34, height - 20),
             Padding = new Thickness(0, 2, 0, 2),
             VerticalAlignment = VerticalAlignment.Top
         };
+        copy.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        copy.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        copy.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetColumn(copy, 1);
         cardGrid.Children.Add(copy);
 
-        copy.Children.Add(new TextBlock
+        var headerText = new TextBlock
         {
             Text = $"{note.StartTime:HH:mm}-{(note.EndTime ?? note.StartTime.AddMinutes(GetDefaultDurationMinutes())):HH:mm}  {note.Title}",
             Foreground = inkBrush,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-        });
-        copy.Children.Add(new TextBlock
+        };
+        copy.Children.Add(headerText);
+
+        var bodyBlock = new TextBlock
         {
-            Text = string.IsNullOrWhiteSpace(note.Body) ? "No text yet" : note.Body,
+            Text = string.IsNullOrWhiteSpace(bodyText) ? T("noTextYet") : bodyText,
             Foreground = mutedTextBrush,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxLines = Math.Max(1, (int)(height / 54))
-        });
+            TextWrapping = TextWrapping.Wrap,
+            MaxLines = bodyMaxLines
+        };
+        Grid.SetRow(bodyBlock, 1);
+        copy.Children.Add(bodyBlock);
 
         var photoCount = attachmentSummary?.PhotoCount ?? 0;
         var audioCount = attachmentSummary?.AudioCount ?? 0;
@@ -770,6 +966,7 @@ public sealed partial class MainPage : Page
                 mediaRow.Children.Add(BuildTimelineMediaBadge(Symbol.Microphone, audioCount, mutedTextBrush));
             }
 
+            Grid.SetRow(mediaRow, 2);
             copy.Children.Add(mediaRow);
         }
 
@@ -793,9 +990,10 @@ public sealed partial class MainPage : Page
             }
         };
         noteButton.Click += NoteButton_Click;
+        noteButton.DoubleTapped += NoteButton_DoubleTapped;
         host.Children.Add(noteButton);
 
-        if (isSelected)
+        if (hasResizeHandles)
         {
             var topHandle = BuildResizeHandle(note, host, ResizeEdge.Top, accentBrush);
             topHandle.VerticalAlignment = VerticalAlignment.Top;
@@ -920,6 +1118,7 @@ public sealed partial class MainPage : Page
                     MinHeight = 34
                 }
             };
+            emptySlot.Click += EmptyHour_Click;
             emptySlot.DoubleTapped += EmptyHour_DoubleTapped;
             stack.Children.Add(emptySlot);
             return row;
@@ -928,8 +1127,11 @@ public sealed partial class MainPage : Page
         foreach (var note in notes)
         {
             var isSelected = _selectedNoteId == note.Id;
+            var hasResizeHandles = _resizeHandlesNoteId == note.Id;
             var durationMinutes = NoteDurationMinutes(note);
             var visualHeight = Math.Max(58, durationMinutes * 1.15);
+            var bodyText = PlainTextFromStoredBody(note.Body);
+            var bodyMaxLines = Math.Max(1, (int)Math.Floor(Math.Max(18, visualHeight - 62) / 18));
             var noteGrid = new Grid
             {
                 ColumnSpacing = 10
@@ -960,10 +1162,11 @@ public sealed partial class MainPage : Page
             });
             copy.Children.Add(new TextBlock
             {
-                Text = string.IsNullOrWhiteSpace(note.Body) ? "No text yet" : note.Body,
+                Text = string.IsNullOrWhiteSpace(bodyText) ? T("noTextYet") : bodyText,
                 Foreground = mutedTextBrush,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxLines = 2
+                TextWrapping = TextWrapping.Wrap,
+                MaxLines = bodyMaxLines
             });
             copy.Children.Add(new TextBlock
             {
@@ -998,8 +1201,9 @@ public sealed partial class MainPage : Page
                 }
             };
             button.Click += NoteButton_Click;
+            button.DoubleTapped += NoteButton_DoubleTapped;
 
-            if (!isSelected)
+            if (!hasResizeHandles)
             {
                 stack.Children.Add(button);
                 continue;
@@ -1053,13 +1257,28 @@ public sealed partial class MainPage : Page
 
         SelectNote(note, $"Selected {note.Title}.");
         await LoadSelectedMediaAsync(note.Id);
+        await RefreshAllNotesPanelAsync();
     }
 
-    private void SelectNote(LocalNote note, string status)
+    private async void NoteButton_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: LocalNote note })
+        {
+            return;
+        }
+
+        SelectNote(note, $"Resize handles enabled for {note.Title}.", showResizeHandles: true);
+        await LoadSelectedMediaAsync(note.Id);
+        await ReloadAsync();
+        e.Handled = true;
+    }
+
+    private void SelectNote(LocalNote note, string status, bool showResizeHandles = false)
     {
         _selectedNoteId = note.Id;
+        _resizeHandlesNoteId = showResizeHandles ? note.Id : null;
         TitleBox.Text = note.Title;
-        BodyBox.Text = note.Body;
+        SetBodyContent(note.Body);
         StartTimePicker.Time = note.StartTime.ToTimeSpan();
         EndTimePicker.Time = note.EndTime?.ToTimeSpan() ?? note.StartTime.AddHours(1).ToTimeSpan();
         SetTranscriptState(note);
@@ -1142,6 +1361,7 @@ public sealed partial class MainPage : Page
                 note.EndTime);
 
             _selectedNoteId = saved.Id;
+            _resizeHandlesNoteId = saved.Id;
             StartTimePicker.Time = saved.StartTime.ToTimeSpan();
             EndTimePicker.Time = (saved.EndTime ?? saved.StartTime.AddMinutes(GetDefaultDurationMinutes())).ToTimeSpan();
             StatusBox.Text = $"Resized to {saved.StartTime:HH:mm}-{saved.EndTime:HH:mm}. Saved locally.";
@@ -1150,6 +1370,17 @@ public sealed partial class MainPage : Page
         });
 
         e.Handled = true;
+    }
+
+    private async void EmptyHour_Click(object sender, RoutedEventArgs e)
+    {
+        if ((_selectedNoteId is null && _resizeHandlesNoteId is null) || sender is not Button { Tag: int hour })
+        {
+            return;
+        }
+
+        ClearSelectedNote(TimeOnly.FromTimeSpan(TimeSpan.FromHours(hour)));
+        await ReloadAsync();
     }
 
     private async void EmptyHour_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
@@ -1171,7 +1402,7 @@ public sealed partial class MainPage : Page
                 startTime.AddMinutes(GetDefaultDurationMinutes()));
 
             ClearMediaState();
-            SelectNote(note, $"Created note at {startTime:HH:mm}. Drag arrows to resize.");
+            SelectNote(note, $"Created note at {startTime:HH:mm}. Drag arrows to resize.", showResizeHandles: true);
             SyncStateText.Text = "Local changes";
             await ReloadAsync();
         });
@@ -1179,11 +1410,25 @@ public sealed partial class MainPage : Page
         e.Handled = true;
     }
 
+    private void ClearSelectedNote(TimeOnly startTime)
+    {
+        _selectedNoteId = null;
+        _resizeHandlesNoteId = null;
+        TitleBox.Text = "";
+        SetBodyContent("");
+        StartTimePicker.Time = startTime.ToTimeSpan();
+        EndTimePicker.Time = startTime.AddMinutes(GetDefaultDurationMinutes()).ToTimeSpan();
+        ClearMediaState();
+        SetTranscriptState(null);
+        StatusBox.Text = "Selection cleared.";
+    }
+
     private void StartNewNote(TimeOnly startTime)
     {
         _selectedNoteId = null;
+        _resizeHandlesNoteId = null;
         TitleBox.Text = "";
-        BodyBox.Text = "";
+        SetBodyContent("");
         StartTimePicker.Time = startTime.ToTimeSpan();
         EndTimePicker.Time = startTime.AddMinutes(GetDefaultDurationMinutes()).ToTimeSpan();
         ClearMediaState();
@@ -1202,7 +1447,7 @@ public sealed partial class MainPage : Page
         var note = await _store.UpsertNoteAsync(
             null,
             title,
-            BodyBox.Text,
+            GetBodyContent(),
             SelectedDate(),
             TimeOnly.FromTimeSpan(StartTimePicker.Time),
             TimeOnly.FromTimeSpan(EndTimePicker.Time));
@@ -1211,7 +1456,321 @@ public sealed partial class MainPage : Page
         TitleBox.Text = note.Title;
     }
 
-    private DateOnly SelectedDate() => DateOnly.FromDateTime(DayPicker.Date.DateTime);
+    private string GetBodyContent()
+    {
+        BodyBox.Document.GetText(TextGetOptions.None, out var plain);
+        BodyBox.Document.GetText(TextGetOptions.FormatRtf, out var rtf);
+        plain = (plain ?? "").TrimEnd('\r', '\n');
+        if (string.IsNullOrWhiteSpace(plain))
+        {
+            return "";
+        }
+
+        return JsonSerializer.Serialize(new StoredRichBody("rtf", plain, rtf ?? ""));
+    }
+
+    private void SetBodyContent(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            BodyBox.Document.SetText(TextSetOptions.None, "");
+            return;
+        }
+
+        if (TryReadStoredRichBody(content, out var stored))
+        {
+            if (!string.IsNullOrWhiteSpace(stored.Rtf))
+            {
+                try
+                {
+                    BodyBox.Document.SetText(TextSetOptions.FormatRtf, stored.Rtf);
+                    BodyBox.Document.GetText(TextGetOptions.None, out var renderedPlain);
+                    if (!string.IsNullOrWhiteSpace(renderedPlain))
+                    {
+                        return;
+                    }
+                }
+                catch
+                {
+                    // Use plain text below if the platform rejects this RTF payload.
+                }
+            }
+
+            BodyBox.Document.SetText(TextSetOptions.None, stored.Plain);
+            return;
+        }
+
+        if (IsStoredRtf(content))
+        {
+            try
+            {
+                BodyBox.Document.SetText(TextSetOptions.FormatRtf, content);
+                return;
+            }
+            catch
+            {
+                // Fall back to plain text if an older local row contains malformed RTF.
+            }
+        }
+
+        if (!TrySetLegacyMarkdownBodyContent(content))
+        {
+            BodyBox.Document.SetText(TextSetOptions.None, content);
+        }
+    }
+
+    private bool TrySetLegacyMarkdownBodyContent(string content)
+    {
+        var canConvertBold = Regex.Matches(content, @"\*\*").Count is var boldMarkerCount && boldMarkerCount > 1 && boldMarkerCount % 2 == 0;
+        var canConvertItalic = content.Count(x => x == '_') is var italicMarkerCount && italicMarkerCount > 1 && italicMarkerCount % 2 == 0;
+        if (!canConvertBold && !canConvertItalic)
+        {
+            return false;
+        }
+
+        BodyBox.Document.SetText(TextSetOptions.None, "");
+        var segment = new StringBuilder();
+        var bold = false;
+        var italic = false;
+
+        for (var i = 0; i < content.Length; i++)
+        {
+            if (canConvertBold && i + 1 < content.Length && content[i] == '*' && content[i + 1] == '*')
+            {
+                TypeRichSegment(segment.ToString(), bold, italic);
+                segment.Clear();
+                bold = !bold;
+                i++;
+                continue;
+            }
+
+            if (canConvertItalic && content[i] == '_')
+            {
+                TypeRichSegment(segment.ToString(), bold, italic);
+                segment.Clear();
+                italic = !italic;
+                continue;
+            }
+
+            segment.Append(content[i]);
+        }
+
+        TypeRichSegment(segment.ToString(), bold, italic);
+        return true;
+    }
+
+    private void TypeRichSegment(string text, bool bold, bool italic)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        var format = BodyBox.Document.Selection.CharacterFormat;
+        format.Bold = bold ? FormatEffect.On : FormatEffect.Off;
+        format.Italic = italic ? FormatEffect.On : FormatEffect.Off;
+        BodyBox.Document.Selection.TypeText(text);
+    }
+
+    private static string PlainTextFromStoredBody(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return "";
+        }
+
+        if (TryReadStoredRichBody(body, out var stored))
+        {
+            return stored.Plain.Trim();
+        }
+
+        if (!IsStoredRtf(body))
+        {
+            return body.Trim();
+        }
+
+        var builder = new StringBuilder();
+        var skipDepth = 0;
+
+        for (var i = 0; i < body.Length; i++)
+        {
+            var current = body[i];
+            if (current == '{')
+            {
+                if (skipDepth > 0)
+                {
+                    skipDepth++;
+                    continue;
+                }
+
+                if (IsIgnorableRtfGroup(body, i))
+                {
+                    skipDepth = 1;
+                }
+
+                continue;
+            }
+
+            if (current == '}')
+            {
+                if (skipDepth > 0)
+                {
+                    skipDepth--;
+                }
+
+                continue;
+            }
+
+            if (skipDepth > 0)
+            {
+                continue;
+            }
+
+            if (current != '\\')
+            {
+                builder.Append(current);
+                continue;
+            }
+
+            if (i + 1 >= body.Length)
+            {
+                continue;
+            }
+
+            var next = body[++i];
+            if (next is '\\' or '{' or '}')
+            {
+                builder.Append(next);
+                continue;
+            }
+
+            if (next == '\'')
+            {
+                i += Math.Min(2, body.Length - i - 1);
+                continue;
+            }
+
+            if (!char.IsLetter(next))
+            {
+                if (next == '~')
+                {
+                    builder.Append(' ');
+                }
+
+                continue;
+            }
+
+            var wordStart = i;
+            while (i + 1 < body.Length && char.IsLetter(body[i + 1]))
+            {
+                i++;
+            }
+
+            var word = body[wordStart..(i + 1)];
+            var sign = 1;
+            var number = 0;
+            var hasNumber = false;
+            if (i + 1 < body.Length && body[i + 1] == '-')
+            {
+                sign = -1;
+                i++;
+            }
+
+            while (i + 1 < body.Length && char.IsDigit(body[i + 1]))
+            {
+                hasNumber = true;
+                number = number * 10 + (body[i + 1] - '0');
+                i++;
+            }
+
+            if (i + 1 < body.Length && body[i + 1] == ' ')
+            {
+                i++;
+            }
+
+            switch (word)
+            {
+                case "par":
+                case "pard":
+                case "line":
+                    builder.AppendLine();
+                    break;
+                case "tab":
+                    builder.Append('\t');
+                    break;
+                case "u" when hasNumber:
+                    var code = sign * number;
+                    builder.Append(char.ConvertFromUtf32(code < 0 ? code + 65536 : code));
+                    if (i + 1 < body.Length && body[i + 1] != '\\' && body[i + 1] != '{' && body[i + 1] != '}')
+                    {
+                        i++;
+                    }
+                    break;
+            }
+        }
+
+        return Regex.Replace(builder.ToString(), @"[ \t]+\r?\n", Environment.NewLine).Trim();
+    }
+
+    private static bool IsStoredRtf(string value) =>
+        value.TrimStart().StartsWith(@"{\rtf", StringComparison.Ordinal);
+
+    private static bool TryReadStoredRichBody(string value, out StoredRichBody stored)
+    {
+        stored = new StoredRichBody("", "", "");
+        if (!value.TrimStart().StartsWith("{", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<StoredRichBody>(value);
+            if (parsed is null || !string.Equals(parsed.Format, "rtf", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            stored = parsed;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsIgnorableRtfGroup(string rtf, int openBraceIndex)
+    {
+        var i = openBraceIndex + 1;
+        if (i >= rtf.Length || rtf[i] != '\\')
+        {
+            return false;
+        }
+
+        i++;
+        if (i < rtf.Length && rtf[i] == '*')
+        {
+            i++;
+            if (i < rtf.Length && rtf[i] == '\\')
+            {
+                i++;
+            }
+        }
+
+        var start = i;
+        while (i < rtf.Length && char.IsLetter(rtf[i]))
+        {
+            i++;
+        }
+
+        var destination = rtf[start..i];
+        return destination is "fonttbl" or "colortbl" or "stylesheet" or "generator" or "info"
+            or "pict" or "object" or "filetbl" or "revtbl" or "rsidtbl" or "listtable"
+            or "listoverridetable" or "header" or "footer" or "pntext";
+    }
+
+    private DateOnly SelectedDate() => _selectedDate;
 
     private static int SnapToQuarterHour(double minutes)
     {
@@ -1267,6 +1826,136 @@ public sealed partial class MainPage : Page
         };
     }
 
+    private void BoldText_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleCharacterFormat(format => format.Bold = FormatEffect.Toggle);
+    }
+
+    private void ItalicText_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleCharacterFormat(format => format.Italic = FormatEffect.Toggle);
+    }
+
+    private void HeadingText_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyCharacterFormat(format =>
+        {
+            format.Bold = FormatEffect.On;
+            format.Size = 20;
+        });
+    }
+
+    private void BulletedList_Click(object sender, RoutedEventArgs e)
+    {
+        PrefixBodyLines("- ");
+    }
+
+    private void NumberedList_Click(object sender, RoutedEventArgs e)
+    {
+        PrefixBodyLines("", numbered: true);
+    }
+
+    private void Checklist_Click(object sender, RoutedEventArgs e)
+    {
+        PrefixBodyLines("- [ ] ");
+    }
+
+    private void QuoteText_Click(object sender, RoutedEventArgs e)
+    {
+        PrefixBodyLines("> ");
+    }
+
+    private void CodeText_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyCharacterFormat(format =>
+        {
+            format.Name = "Consolas";
+            format.BackgroundColor = Color.FromArgb(255, 230, 247, 245);
+        });
+    }
+
+    private void LinkText_Click(object sender, RoutedEventArgs e)
+    {
+        InsertLinkMarkup();
+    }
+
+    private void BoldText_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        ToggleCharacterFormat(format => format.Bold = FormatEffect.Toggle);
+        args.Handled = true;
+    }
+
+    private void ItalicText_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        ToggleCharacterFormat(format => format.Italic = FormatEffect.Toggle);
+        args.Handled = true;
+    }
+
+    private void LinkText_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        InsertLinkMarkup();
+        args.Handled = true;
+    }
+
+    private void TableText_Click(object sender, RoutedEventArgs e)
+    {
+        var table = string.Join(Environment.NewLine, [
+            "",
+            "| " + T("tableColumn") + " 1 | " + T("tableColumn") + " 2 |",
+            "| --- | --- |",
+            "| " + T("tableCell") + " | " + T("tableCell") + " |",
+            ""
+        ]);
+        InsertBodyText(table);
+    }
+
+    private string SelectedBodyText()
+    {
+        BodyBox.Document.Selection.GetText(TextGetOptions.None, out var selected);
+        return selected ?? "";
+    }
+
+    private void PrefixBodyLines(string prefix, bool numbered = false)
+    {
+        var selected = SelectedBodyText();
+        var body = string.IsNullOrEmpty(selected) ? "" : selected;
+        var lines = body.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        var formatted = lines
+            .Select((line, index) => numbered ? $"{index + 1}. {line}" : $"{prefix}{line}")
+            .ToArray();
+        InsertBodyText(string.Join(Environment.NewLine, formatted));
+    }
+
+    private void InsertLinkMarkup()
+    {
+        var selected = SelectedBodyText();
+        if (string.IsNullOrEmpty(selected))
+        {
+            InsertBodyText("https://");
+            return;
+        }
+
+        InsertBodyText($"{selected} (https://)");
+    }
+
+    private void InsertBodyText(string text)
+    {
+        BodyBox.Document.Selection.TypeText(text);
+        BodyBox.Focus(FocusState.Programmatic);
+    }
+
+    private void ToggleCharacterFormat(Action<ITextCharacterFormat> update)
+    {
+        update(BodyBox.Document.Selection.CharacterFormat);
+        BodyBox.Focus(FocusState.Programmatic);
+    }
+
+    private void ApplyCharacterFormat(Action<ITextCharacterFormat> update)
+    {
+        update(BodyBox.Document.Selection.CharacterFormat);
+        BodyBox.Focus(FocusState.Programmatic);
+    }
+
     private async void PlayAudio_Click(object sender, RoutedEventArgs e)
     {
         await RunUiAsync(async () =>
@@ -1290,8 +1979,8 @@ public sealed partial class MainPage : Page
             AudioPlayerElement.Visibility = Visibility.Visible;
             _audioPlayer.Source = MediaSource.CreateFromStorageFile(file);
             _audioPlayer.Play();
-            AudioStatusText.Text = "Playing latest audio";
-            SetMediaAction("Playing audio.", false);
+            AudioStatusText.Text = T("playingAudio");
+            SetMediaAction(T("playingAudio"), false);
             StatusBox.Text = "Playing local audio. Use the player controls under the buttons.";
         });
     }
@@ -1305,8 +1994,8 @@ public sealed partial class MainPage : Page
         }
 
         AudioPlayerElement.Visibility = Visibility.Collapsed;
-        AudioStatusText.Text = _selectedAudioAttachment is null ? "No audio attached" : "Ready to play latest audio";
-        SetMediaAction(_selectedAudioAttachment is null ? "No audio selected." : "Audio ready.", false);
+        AudioStatusText.Text = _selectedAudioAttachment is null ? T("noAudioAttached") : T("readyToPlayAudio");
+        SetMediaAction(_selectedAudioAttachment is null ? T("noAudioAttached") : T("readyToPlayAudio"), false);
         StatusBox.Text = "Audio stopped.";
     }
 
@@ -1325,7 +2014,7 @@ public sealed partial class MainPage : Page
         AudioPlayerElement.Visibility = Visibility.Collapsed;
         AudioStatusText.Text = hasAudio
             ? $"{audioAttachments.Length} audio attached. Ready to play latest."
-            : "No audio attached";
+            : T("noAudioAttached");
         SetMediaAction(hasAudio ? "Audio ready. Press Play audio." : "Record audio or attach photos to this note.", false);
 
         RenderPhotos(attachments);
@@ -1339,10 +2028,10 @@ public sealed partial class MainPage : Page
         PlayAudioButton.IsEnabled = false;
         StopAudioButton.IsEnabled = false;
         AudioPlayerElement.Visibility = Visibility.Collapsed;
-        AudioStatusText.Text = "No audio attached";
+        AudioStatusText.Text = T("noAudioAttached");
         PhotosPanel.Children.Clear();
-        PhotoStatusText.Text = "No photos yet";
-        MediaStateText.Text = "None";
+        PhotoStatusText.Text = T("noPhotosYet");
+        MediaStateText.Text = T("none");
         SetMediaAction("Record audio or attach photos to this note.", false);
     }
 
@@ -1362,7 +2051,7 @@ public sealed partial class MainPage : Page
         }
 
         TitleBox.Text = note.Title;
-        BodyBox.Text = note.Body;
+        SetBodyContent(note.Body);
         SetTranscriptState(note);
     }
 
@@ -1370,28 +2059,28 @@ public sealed partial class MainPage : Page
     {
         if (note is null)
         {
-            TranscriptStatusText.Text = "No transcript yet";
+            TranscriptStatusText.Text = T("noTranscriptYet");
             TranscriptBox.Text = "";
-            TranscriptStateText.Text = "No audio";
+            TranscriptStateText.Text = T("noAudio");
             return;
         }
 
         TranscriptStatusText.Text = note.TranscriptStatus switch
         {
-            TranscriptStatus.Pending => "Transcript queued",
-            TranscriptStatus.Processing => "Transcription in progress",
-            TranscriptStatus.Done => "Transcript ready",
-            TranscriptStatus.Failed => "Transcription failed",
-            _ => "No transcript yet"
+            TranscriptStatus.Pending => T("transcriptQueued"),
+            TranscriptStatus.Processing => T("transcriptionInProgress"),
+            TranscriptStatus.Done => T("transcriptReady"),
+            TranscriptStatus.Failed => T("transcriptionFailed"),
+            _ => T("noTranscriptYet")
         };
         TranscriptBox.Text = note.TranscriptText ?? "";
         TranscriptStateText.Text = note.TranscriptStatus switch
         {
-            TranscriptStatus.Pending => "Queued",
-            TranscriptStatus.Processing => "Processing",
-            TranscriptStatus.Done => "Ready",
-            TranscriptStatus.Failed => "Failed",
-            _ => "No audio"
+            TranscriptStatus.Pending => T("queued"),
+            TranscriptStatus.Processing => T("processing"),
+            TranscriptStatus.Done => T("ready"),
+            TranscriptStatus.Failed => T("failed"),
+            _ => T("noAudio")
         };
     }
 
@@ -1401,10 +2090,10 @@ public sealed partial class MainPage : Page
         var audio = attachments.Count(x => x.Type == AttachmentType.Audio && File.Exists(x.LocalPath));
         MediaStateText.Text = (photos, audio) switch
         {
-            (0, 0) => "None",
-            (0, _) => $"{audio} audio",
-            (_, 0) => $"{photos} photo",
-            _ => $"{photos} photo / {audio} audio"
+            (0, 0) => T("none"),
+            (0, _) => $"{audio} {T("audio")}",
+            (_, 0) => $"{photos} {T("photo")}",
+            _ => $"{photos} {T("photo")} / {audio} {T("audio")}"
         };
     }
 
@@ -1467,21 +2156,109 @@ public sealed partial class MainPage : Page
             return;
         }
 
-        SetBrush("AppBackgroundBrush", Color.FromArgb(255, 238, 241, 236));
-        SetBrush("PanelBrush", Color.FromArgb(255, 247, 247, 242));
+        SetBrush("AppBackgroundBrush", Color.FromArgb(255, 238, 248, 247));
+        SetBrush("PanelBrush", Color.FromArgb(255, 247, 252, 251));
         SetBrush("PanelAltBrush", Color.FromArgb(255, 255, 255, 255));
-        SetBrush("LineBrush", Color.FromArgb(255, 229, 226, 218));
-        SetBrush("MutedTextBrush", Color.FromArgb(255, 111, 106, 98));
-        SetBrush("InkBrush", Color.FromArgb(255, 33, 31, 27));
-        SetBrush("InputBrush", Color.FromArgb(255, 20, 24, 22));
-        SetBrush("InputHoverBrush", Color.FromArgb(255, 27, 33, 30));
-        SetBrush("InputPressedBrush", Color.FromArgb(255, 16, 19, 17));
-        SetBrush("InputTextBrush", Color.FromArgb(255, 255, 255, 255));
-        SetBrush("InputPlaceholderBrush", Color.FromArgb(255, 174, 183, 177));
-        SetBrush("AccentSoftBrush", Color.FromArgb(255, 220, 239, 230));
-        SetBrush("AccentBrush", Color.FromArgb(255, 49, 122, 91));
+        SetBrush("LineBrush", Color.FromArgb(255, 214, 236, 234));
+        SetBrush("MutedTextBrush", Color.FromArgb(255, 96, 115, 112));
+        SetBrush("InkBrush", Color.FromArgb(255, 24, 51, 49));
+        SetBrush("InputBrush", Color.FromArgb(255, 255, 255, 255));
+        SetBrush("InputHoverBrush", Color.FromArgb(255, 242, 251, 250));
+        SetBrush("InputPressedBrush", Color.FromArgb(255, 230, 247, 245));
+        SetBrush("InputTextBrush", Color.FromArgb(255, 24, 51, 49));
+        SetBrush("InputPlaceholderBrush", Color.FromArgb(255, 109, 133, 130));
+        SetBrush("AccentSoftBrush", Color.FromArgb(255, 216, 244, 241));
+        SetBrush("AccentBrush", Color.FromArgb(255, 14, 159, 154));
         SetBrush("DangerBrush", Color.FromArgb(255, 178, 74, 67));
         Background = (Brush)Resources["AppBackgroundBrush"];
+    }
+
+    private void ApplyLanguageSetting(string language)
+    {
+        var normalizedLanguage = NormalizeAppLanguage(language);
+        SetSetting(AppLanguageSettingKey, normalizedLanguage);
+        var cultureLanguage = CultureLanguage(normalizedLanguage);
+        ApplicationLanguages.PrimaryLanguageOverride = cultureLanguage;
+
+        AuthSubtitleText.Text = T("authSubtitle");
+        EmailLabel.Text = T("email");
+        PasswordLabel.Text = T("password");
+        ResetTokenLabel.Text = T("resetToken");
+        EmailBox.PlaceholderText = T("emailPlaceholder");
+        PasswordBox.PlaceholderText = T("passwordPlaceholder");
+        TokenBox.PlaceholderText = T("tokenPlaceholder");
+        LoginButtonText.Text = T("login");
+        RegisterButtonText.Text = T("register");
+        ForgotButtonText.Text = T("forgot");
+        ResetButtonText.Text = T("reset");
+
+        SyncButtonText.Text = T("sync");
+        SettingsButtonText.Text = T("settings");
+        LogoutButtonText.Text = T("logout");
+        ActivityTitleText.Text = T("activity");
+        SyncMetricTitleText.Text = T("syncShort");
+        MediaMetricTitleText.Text = T("media");
+        TranscriptMetricTitleText.Text = T("transcript");
+        AllNotesTitleText.Text = T("allNotes");
+        AllNotesSubtitleText.Text = T("allNotesSubtitle");
+        if (MediaStateText.Text is "None" or "Нет")
+        {
+            MediaStateText.Text = T("none");
+        }
+
+        TimelineTitleText.Text = T("dayTimeline");
+        TimelineSubtitleText.Text = T("timelineSubtitle");
+        ApplyDateSelectorLanguage(cultureLanguage);
+        DayPickerHeaderText.Text = T("day");
+        SearchBox.Header = T("search");
+        SearchBox.PlaceholderText = T("searchPlaceholder");
+
+        NotePanelTitleText.Text = T("note");
+        NotePanelSubtitleText.Text = T("noteSubtitle");
+        StartTimePicker.Language = cultureLanguage;
+        EndTimePicker.Language = cultureLanguage;
+        StartTimePicker.Header = T("start");
+        EndTimePicker.Header = T("end");
+        VoiceMediaTitleText.Text = T("voiceMedia");
+        VoiceMediaSubtitleText.Text = T("voiceMediaSubtitle");
+        TranscriptionLanguageSummaryText.Text = $"{T("transcriptionLanguage")}: {FormatTranscriptionLanguage(GetSelectedLanguage())}";
+        SetRecordButtonContent(_isRecording ? Symbol.Stop : Symbol.Microphone, _isRecording ? T("stopRecording") : T("recordAudio"));
+        AddPhotoButtonText.Text = T("addPhoto");
+        PlayAudioButtonText.Text = T("playAudio");
+        StopAudioButtonText.Text = T("stop");
+        TranscriptBox.PlaceholderText = T("transcriptPlaceholder");
+        TitleBox.Header = T("title");
+        TitleBox.PlaceholderText = T("titlePlaceholder");
+        BodyBox.Header = T("text");
+        BodyBox.PlaceholderText = T("bodyPlaceholder");
+        BoldMenuItem.Text = T("formatBold");
+        ItalicMenuItem.Text = T("formatItalic");
+        HeadingMenuItem.Text = T("formatHeading");
+        BulletedListMenuItem.Text = T("formatBulletedList");
+        NumberedListMenuItem.Text = T("formatNumberedList");
+        ChecklistMenuItem.Text = T("formatChecklist");
+        QuoteMenuItem.Text = T("formatQuote");
+        CodeMenuItem.Text = T("formatCode");
+        LinkMenuItem.Text = T("formatLink");
+        TableMenuItem.Text = T("formatTable");
+        NewNoteButtonText.Text = T("newNote");
+        SaveNoteButtonText.Text = T("saveNote");
+        DeleteNoteButtonText.Text = T("delete");
+
+        if (_selectedAudioAttachment is null)
+        {
+            AudioStatusText.Text = T("noAudioAttached");
+        }
+
+        if (PhotosPanel.Children.Count == 0)
+        {
+            PhotoStatusText.Text = T("noPhotosYet");
+        }
+
+        if (_selectedNoteId is null)
+        {
+            SetTranscriptState(null);
+        }
     }
 
     private void SetBrush(string key, Color color)
@@ -1498,14 +2275,374 @@ public sealed partial class MainPage : Page
         return int.TryParse(raw, out var minutes) && minutes > 0 ? minutes : 60;
     }
 
-    private string GetSelectedLanguage()
+    private string FormatTranscriptionLanguage(string language)
     {
-        return SelectedTag(LanguageBox, GetStringSetting(TranscriptionLanguageSettingKey, "auto"));
+        return NormalizeLanguage(language) switch
+        {
+            "ru" => T("languageRussian"),
+            "uk" => T("languageUkrainian"),
+            "en" => T("languageEnglish"),
+            _ => T("languageAuto")
+        };
     }
 
-    private void SetLanguageBoxValue(string language)
+    private static string NormalizeLanguage(string language)
     {
-        SelectComboBoxValue(LanguageBox, language);
+        return language.Equals("ru", StringComparison.OrdinalIgnoreCase)
+            ? "ru"
+            : language.Equals("uk", StringComparison.OrdinalIgnoreCase)
+                ? "uk"
+                : language.Equals("en", StringComparison.OrdinalIgnoreCase)
+                    ? "en"
+                    : "auto";
+    }
+
+    private static string NormalizeAppLanguage(string language)
+    {
+        return language.Equals("ru", StringComparison.OrdinalIgnoreCase) ? "ru" : "en";
+    }
+
+    private static string CultureLanguage(string language)
+    {
+        return NormalizeAppLanguage(language) switch
+        {
+            "ru" => "ru-RU",
+            _ => "en-US"
+        };
+    }
+
+    private void ApplyDateSelectorLanguage(string cultureLanguage)
+    {
+        MonthBox.Language = cultureLanguage;
+        DayBox.Language = cultureLanguage;
+        YearBox.Language = cultureLanguage;
+        PopulateDateSelector(cultureLanguage);
+    }
+
+    private void SetSelectedDate(DateOnly date, bool reload)
+    {
+        _selectedDate = date;
+        PopulateDateSelector(CultureLanguage(GetStringSetting(AppLanguageSettingKey, "en")));
+    }
+
+    private void PopulateDateSelector(string cultureLanguage)
+    {
+        if (MonthBox is null || DayBox is null || YearBox is null)
+        {
+            return;
+        }
+
+        _isUpdatingDateSelector = true;
+        try
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureLanguage);
+
+            MonthBox.Items.Clear();
+            for (var month = 1; month <= 12; month++)
+            {
+                MonthBox.Items.Add(new ComboBoxItem
+                {
+                    Content = CapitalizeMonth(culture.DateTimeFormat.GetMonthName(month), culture),
+                    Tag = month
+                });
+            }
+
+            var firstYear = Math.Min(DateTime.Now.Year, _selectedDate.Year) - 5;
+            var lastYear = Math.Max(DateTime.Now.Year, _selectedDate.Year) + 5;
+            YearBox.Items.Clear();
+            for (var year = firstYear; year <= lastYear; year++)
+            {
+                YearBox.Items.Add(new ComboBoxItem
+                {
+                    Content = year.ToString(CultureInfo.InvariantCulture),
+                    Tag = year
+                });
+            }
+
+            PopulateDayBox(_selectedDate.Year, _selectedDate.Month, _selectedDate.Day);
+            SelectComboBoxValue(MonthBox, _selectedDate.Month.ToString(CultureInfo.InvariantCulture));
+            SelectComboBoxValue(YearBox, _selectedDate.Year.ToString(CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            _isUpdatingDateSelector = false;
+        }
+    }
+
+    private void PopulateDayBox(int year, int month, int selectedDay)
+    {
+        DayBox.Items.Clear();
+        var days = DateTime.DaysInMonth(year, month);
+        for (var day = 1; day <= days; day++)
+        {
+            DayBox.Items.Add(new ComboBoxItem
+            {
+                Content = day.ToString(CultureInfo.InvariantCulture),
+                Tag = day
+            });
+        }
+
+        SelectComboBoxValue(DayBox, Math.Clamp(selectedDay, 1, days).ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static int SelectedInt(ComboBox box, int fallback)
+    {
+        if (box.SelectedItem is ComboBoxItem item)
+        {
+            var raw = (item.Tag ?? item.Content)?.ToString();
+            if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+            {
+                return value;
+            }
+        }
+
+        return fallback;
+    }
+
+    private static string CapitalizeMonth(string month, CultureInfo culture)
+    {
+        return string.IsNullOrWhiteSpace(month) ? month : culture.TextInfo.ToTitleCase(month);
+    }
+
+    private string T(string key)
+    {
+        var language = NormalizeAppLanguage(GetStringSetting(AppLanguageSettingKey, "en"));
+        return language switch
+        {
+            "ru" => key switch
+            {
+                "appLanguage" => "Язык приложения",
+                "theme" => "Тема",
+                "themeLight" => "Светлая",
+                "themeDark" => "Тёмная",
+                "defaultNoteLength" => "Длина новой заметки",
+                "duration30" => "30 минут",
+                "duration60" => "1 час",
+                "duration90" => "1.5 часа",
+                "duration120" => "2 часа",
+                "transcriptionLanguage" => "Язык транскрипции",
+                "languageAuto" => "Авто",
+                "languageRussian" => "Русский",
+                "languageUkrainian" => "Украинский",
+                "languageEnglish" => "Английский",
+                "autoSyncMedia" => "Синхронизировать после записи или фото",
+                "settings" => "Настройки",
+                "save" => "Сохранить",
+                "cancel" => "Отмена",
+                "settingsSaved" => "Настройки сохранены.",
+                "authSubtitle" => "Войдите, чтобы открыть заметки, календарь и голосовые расшифровки.",
+                "email" => "Email",
+                "password" => "Пароль",
+                "resetToken" => "Токен сброса",
+                "emailPlaceholder" => "you@example.com",
+                "passwordPlaceholder" => "Минимум 8 символов",
+                "tokenPlaceholder" => "Нужен только после Forgot",
+                "login" => "Войти",
+                "register" => "Регистрация",
+                "forgot" => "Забыли пароль",
+                "reset" => "Сбросить",
+                "sync" => "Синхронизация",
+                "syncShort" => "Синхр.",
+                "logout" => "Выйти",
+                "activity" => "Активность",
+                "media" => "Медиа",
+                "transcript" => "Транскрипт",
+                "allNotes" => "Все заметки",
+                "allNotesSubtitle" => "Откройте любую заметку как полотно",
+                "dayTimeline" => "День по часам",
+                "timelineSubtitle" => "Один день, один час за раз",
+                "day" => "День",
+                "search" => "Поиск",
+                "searchPlaceholder" => "Поиск по заметкам или транскрипту",
+                "note" => "Заметка",
+                "noteSubtitle" => "Пишите, добавляйте фото или записывайте аудио",
+                "start" => "Начало",
+                "end" => "Конец",
+                "voiceMedia" => "Голос и медиа",
+                "voiceMediaSubtitle" => "Запишите аудио или прикрепите фото.",
+                "recordAudio" => "Записать аудио",
+                "stopRecording" => "Остановить запись",
+                "addPhoto" => "Добавить фото",
+                "playAudio" => "Прослушать",
+                "stop" => "Стоп",
+                "transcriptPlaceholder" => "Транскрипт появится после синхронизации",
+                "title" => "Название",
+                "titlePlaceholder" => "Встреча, идея, звонок...",
+                "text" => "Текст",
+                "bodyPlaceholder" => "Начните писать...",
+                "newNote" => "Новая",
+                "saveNote" => "Сохранить",
+                "delete" => "Удалить",
+                "noAudioAttached" => "Аудио не прикреплено",
+                "readyToPlayAudio" => "Аудио готово к прослушиванию",
+                "playingAudio" => "Аудио воспроизводится",
+                "noPhotosYet" => "Фото пока нет",
+                "noTranscriptYet" => "Транскрипта пока нет",
+                "noAudio" => "Нет аудио",
+                "transcriptQueued" => "Транскрипция в очереди",
+                "transcriptionInProgress" => "Транскрипция выполняется",
+                "transcriptReady" => "Транскрипт готов",
+                "transcriptionFailed" => "Транскрипция не удалась",
+                "queued" => "В очереди",
+                "processing" => "В работе",
+                "ready" => "Готово",
+                "failed" => "Ошибка",
+                "none" => "Нет",
+                "photo" => "фото",
+                "audio" => "аудио",
+                "noNotesYet" => "Заметок пока нет.",
+                "untitledNote" => "Без названия",
+                "noTextYet" => "Текста пока нет",
+                "openedNote" => "Открыта заметка",
+                "boldTextSample" => "жирный текст",
+                "italicTextSample" => "курсив",
+                "codeTextSample" => "код",
+                "linkTextSample" => "ссылка",
+                "listItemSample" => "пункт",
+                "tableColumn" => "Колонка",
+                "tableCell" => "Ячейка",
+                "formatBold" => "Жирный",
+                "formatItalic" => "Курсив",
+                "formatHeading" => "Заголовок",
+                "formatBulletedList" => "Маркированный список",
+                "formatNumberedList" => "Нумерованный список",
+                "formatChecklist" => "Чеклист",
+                "formatQuote" => "Цитата",
+                "formatCode" => "Код",
+                "formatLink" => "Ссылка",
+                "formatTable" => "Таблица",
+                "recordingStarted" => "Идёт запись аудио. Нажмите остановку, когда закончите.",
+                "checkingSession" => "Проверяю сохранённый вход...",
+                "welcomeBack" => "С возвращением. Это устройство запомнено.",
+                "registerOnce" => "Зарегистрируйтесь один раз, затем войдите. Это устройство будет запомнено.",
+                "accountCreated" => "Аккаунт создан. Нажмите Войти, чтобы открыть приложение.",
+                "signedInRemembered" => "Вы вошли. Это устройство будет запомнено.",
+                "loggedOut" => "Вы вышли. Войдите снова, чтобы запомнить это устройство.",
+                "resetTokenCreated" => "Токен сброса пароля создан для разработки.",
+                "passwordChanged" => "Пароль изменён. Теперь можно войти.",
+                "offline" => "Офлайн",
+                _ => key
+            },
+            _ => key switch
+            {
+                "appLanguage" => "App language",
+                "theme" => "Theme",
+                "themeLight" => "Light",
+                "themeDark" => "Dark",
+                "defaultNoteLength" => "Default note length",
+                "duration30" => "30 minutes",
+                "duration60" => "1 hour",
+                "duration90" => "1.5 hours",
+                "duration120" => "2 hours",
+                "transcriptionLanguage" => "Transcription language",
+                "languageAuto" => "Auto",
+                "languageRussian" => "Russian",
+                "languageUkrainian" => "Ukrainian",
+                "languageEnglish" => "English",
+                "autoSyncMedia" => "Auto sync after recording or photo",
+                "settings" => "Settings",
+                "save" => "Save",
+                "cancel" => "Cancel",
+                "settingsSaved" => "Settings saved.",
+                "authSubtitle" => "Sign in to open your notes, calendar and voice transcripts.",
+                "email" => "Email",
+                "password" => "Password",
+                "resetToken" => "Reset token",
+                "emailPlaceholder" => "you@example.com",
+                "passwordPlaceholder" => "Minimum 8 characters",
+                "tokenPlaceholder" => "Only needed after Forgot",
+                "login" => "Login",
+                "register" => "Register",
+                "forgot" => "Forgot",
+                "reset" => "Reset",
+                "sync" => "Sync",
+                "syncShort" => "Sync",
+                "logout" => "Logout",
+                "activity" => "Activity",
+                "media" => "Media",
+                "transcript" => "Transcript",
+                "allNotes" => "All notes",
+                "allNotesSubtitle" => "Open any note as a full canvas",
+                "dayTimeline" => "Day timeline",
+                "timelineSubtitle" => "Focus on one day, one hour at a time",
+                "day" => "Day",
+                "search" => "Search",
+                "searchPlaceholder" => "Search notes or transcript",
+                "note" => "Note",
+                "noteSubtitle" => "Write, attach photos, or record audio",
+                "start" => "Start",
+                "end" => "End",
+                "voiceMedia" => "Voice & media",
+                "voiceMediaSubtitle" => "Record audio or attach photos.",
+                "recordAudio" => "Record audio",
+                "stopRecording" => "Stop recording",
+                "addPhoto" => "Add photo",
+                "playAudio" => "Play audio",
+                "stop" => "Stop",
+                "transcriptPlaceholder" => "Transcript will appear here after sync",
+                "title" => "Title",
+                "titlePlaceholder" => "Meeting, idea, call...",
+                "text" => "Text",
+                "bodyPlaceholder" => "Start typing...",
+                "newNote" => "New",
+                "saveNote" => "Save note",
+                "delete" => "Delete",
+                "noAudioAttached" => "No audio attached",
+                "readyToPlayAudio" => "Ready to play latest audio",
+                "playingAudio" => "Playing audio",
+                "noPhotosYet" => "No photos yet",
+                "noTranscriptYet" => "No transcript yet",
+                "noAudio" => "No audio",
+                "transcriptQueued" => "Transcript queued",
+                "transcriptionInProgress" => "Transcription in progress",
+                "transcriptReady" => "Transcript ready",
+                "transcriptionFailed" => "Transcription failed",
+                "queued" => "Queued",
+                "processing" => "Processing",
+                "ready" => "Ready",
+                "failed" => "Failed",
+                "none" => "None",
+                "photo" => "photo",
+                "audio" => "audio",
+                "noNotesYet" => "No notes yet.",
+                "untitledNote" => "Untitled note",
+                "noTextYet" => "No text yet",
+                "openedNote" => "Opened",
+                "boldTextSample" => "bold text",
+                "italicTextSample" => "italic text",
+                "codeTextSample" => "code",
+                "linkTextSample" => "link",
+                "listItemSample" => "item",
+                "tableColumn" => "Column",
+                "tableCell" => "Cell",
+                "formatBold" => "Bold",
+                "formatItalic" => "Italic",
+                "formatHeading" => "Heading",
+                "formatBulletedList" => "Bulleted list",
+                "formatNumberedList" => "Numbered list",
+                "formatChecklist" => "Checklist",
+                "formatQuote" => "Quote",
+                "formatCode" => "Code",
+                "formatLink" => "Link",
+                "formatTable" => "Table",
+                "recordingStarted" => "Recording audio. Press Stop recording when done.",
+                "checkingSession" => "Checking saved session...",
+                "welcomeBack" => "Welcome back. Your device is remembered.",
+                "registerOnce" => "Register once, then login. This device will be remembered.",
+                "accountCreated" => "Account created. Press Login to open the app.",
+                "signedInRemembered" => "Signed in. This device will be remembered.",
+                "loggedOut" => "Logged out. Login again to remember this device.",
+                "resetTokenCreated" => "Password reset token created for development.",
+                "passwordChanged" => "Password changed. You can log in now.",
+                "offline" => "Offline",
+                _ => key
+            }
+        };
+    }
+
+    private string GetSelectedLanguage()
+    {
+        return GetStringSetting(TranscriptionLanguageSettingKey, "auto");
     }
 
     private void SelectComboBoxValue(ComboBox box, string value)
@@ -1571,7 +2708,7 @@ public sealed partial class MainPage : Page
         {
             DispatcherQueue.TryEnqueue(() =>
             {
-                AudioStatusText.Text = _selectedAudioAttachment is null ? "No audio attached" : "Ready to play latest audio";
+                AudioStatusText.Text = _selectedAudioAttachment is null ? T("noAudioAttached") : T("readyToPlayAudio");
             });
         };
 
@@ -1586,8 +2723,8 @@ public sealed partial class MainPage : Page
 
         PhotosPanel.Children.Clear();
         PhotoStatusText.Text = photos.Length == 0
-            ? "No photos yet"
-            : $"{photos.Length} photo{(photos.Length == 1 ? "" : "s")} attached. Click a photo to preview.";
+            ? T("noPhotosYet")
+            : $"{photos.Length} {T("photo")} attached. Click a photo to preview.";
 
         foreach (var photo in photos)
         {
@@ -1755,6 +2892,6 @@ public sealed partial class MainPage : Page
         AppShell.Visibility = Visibility.Visible;
         UserLabel.Text = _api.CurrentUser?.Email ?? "Calendar-first notes";
         StatusBox.Text = status;
-        SyncStateText.Text = _api.IsSignedIn ? "Ready" : "Offline";
+        SyncStateText.Text = _api.IsSignedIn ? T("ready") : T("offline");
     }
 }
