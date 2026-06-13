@@ -63,6 +63,13 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "ok",
+    service = "ProjectCal.Api",
+    time = DateTimeOffset.UtcNow
+}));
+
 var auth = app.MapGroup("/api/auth").RequireRateLimiting("auth");
 
 auth.MapPost("/register", async (RegisterRequest request, AppDbContext db, CancellationToken ct) =>

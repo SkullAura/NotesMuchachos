@@ -69,6 +69,9 @@ dotnet run --project src\ProjectCal.Worker\ProjectCal.Worker.csproj
 You can also use `DATABASE_URL=postgresql://...`; the app converts it to an Npgsql connection string and enables SSL.
 The API still stores uploaded media on the local filesystem, so the API and worker must see the same media path when deployed separately.
 
+For the full cloud sync checklist, see [`docs/CLOUD_SETUP.md`](docs/CLOUD_SETUP.md).
+In the Windows client, `Cloud API URL` must point to the deployed `ProjectCal.Api` backend, not directly to Supabase.
+
 ## GitHub
 
 This repository includes `.gitignore` and a GitHub Actions workflow at `.github/workflows/ci.yml`.
@@ -84,6 +87,22 @@ git push -u origin main
 ```
 
 The development auth endpoints return email confirmation and password reset tokens in the JSON response. Replace that with a real email provider before production.
+
+## Windows EXE installer
+
+This branch can build a traditional Windows installer:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build\Build-ExeInstaller.ps1
+```
+
+The output is:
+
+```text
+artifacts\installer\output\ProjectCalSetup.exe
+```
+
+GitHub Actions also includes `ProjectCal Installer`, which builds the setup executable as an artifact. Pushing a `v*` tag creates a GitHub Release with `ProjectCalSetup.exe`.
 
 ## Current MVP Behavior
 

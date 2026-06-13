@@ -1,0 +1,42 @@
+name: ProjectCal Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [exe-installer]
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\build\Build-ExeInstaller.ps1
+
+      - name: Upload setup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectCalSetup
+          path: artifacts/installer/output/ProjectCalSetup.exe
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/installer/output/ProjectCalSetup.exe

@@ -2,9 +2,9 @@ name: ProjectCal CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, exe-installer]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, exe-installer]
 
 jobs:
   build-test:
@@ -24,6 +24,9 @@ jobs:
 
       - name: Build
         run: dotnet build ProjectCal.slnx --no-restore --configuration Release
+
+      - name: Format check
+        run: dotnet format ProjectCal.slnx --verify-no-changes --no-restore
 
       - name: Test
         run: dotnet test ProjectCal.slnx --no-build --configuration Release --verbosity normal
