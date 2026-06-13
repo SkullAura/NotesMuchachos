@@ -14,6 +14,34 @@ public sealed class ProjectCalApiClient
 
     public bool IsSignedIn => !string.IsNullOrWhiteSpace(_accessToken);
     public UserProfileDto? CurrentUser { get; private set; }
+    public string BaseUrl => _http.BaseAddress?.ToString().TrimEnd('/') ?? "http://localhost:5009";
+
+    public bool SetBaseUrl(string baseUrl, bool resetSession)
+    {
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+        {
+            throw new ArgumentException("API URL is not valid.", nameof(baseUrl));
+        }
+
+        var normalized = new Uri(uri.GetLeftPart(UriPartial.Authority));
+        var changed = !string.Equals(
+            _http.BaseAddress?.ToString().TrimEnd('/'),
+            normalized.ToString().TrimEnd('/'),
+            StringComparison.OrdinalIgnoreCase);
+
+        if (!changed)
+        {
+            return false;
+        }
+
+        if (resetSession)
+        {
+            Logout();
+        }
+
+        _http.BaseAddress = normalized;
+        return true;
+    }
 
     public async Task<RegisterResponse> RegisterAsync(string email, string password)
     {

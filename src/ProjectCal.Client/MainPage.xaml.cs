@@ -33,6 +33,9 @@ public sealed partial class MainPage : Page
     private const string DefaultDurationSettingKey = "settings_default_duration";
     private const string TranscriptionLanguageSettingKey = "settings_transcription_language";
     private const string AutoSyncMediaSettingKey = "settings_auto_sync_media";
+    private const string SyncModeSettingKey = "settings_sync_mode";
+    private const string CloudApiUrlSettingKey = "settings_cloud_api_url";
+    private const string LocalApiUrl = "http://localhost:5009";
     private const string UpdateBranch = "first-ui-update";
     private const string UpdateCommitUrl = "https://api.github.com/repos/SkullAura/NotesMuchachos/commits/" + UpdateBranch;
 
@@ -75,6 +78,7 @@ public sealed partial class MainPage : Page
         InitializeComponent();
         ApplyThemeSetting(GetStringSetting(ThemeSettingKey, "Light"));
         ApplyLanguageSetting(GetStringSetting(AppLanguageSettingKey, "en"));
+        ConfigureApiClientFromSettings(resetSession: false);
         _audioPlayer = CreateAudioPlayer();
         AudioPlayerElement.SetMediaPlayer(_audioPlayer);
         SetSelectedDate(DateOnly.FromDateTime(DateTime.Now), reload: false);
@@ -120,12 +124,7 @@ public sealed partial class MainPage : Page
     private async void Logout_Click(object sender, RoutedEventArgs e)
     {
         _api.Logout();
-        _selectedNoteId = null;
-        _resizeHandlesNoteId = null;
-        ClearMediaState();
-        AuthScreen.Visibility = Visibility.Visible;
-        AppShell.Visibility = Visibility.Collapsed;
-        AuthStatusBox.Text = T("loggedOut");
+        ReturnToAuthScreen(T("loggedOut"));
         await ReloadAsync();
     }
 
@@ -336,6 +335,36 @@ public sealed partial class MainPage : Page
             (T("languageEnglish"), "en")
         ], GetStringSetting(TranscriptionLanguageSettingKey, "auto"));
 
+        var syncModeBox = SettingComboBox(T("syncMode"), [
+            (T("syncModeLocal"), "Local"),
+            (T("syncModeCloud"), "Cloud")
+        ], NormalizeSyncMode(GetStringSetting(SyncModeSettingKey, "Local")));
+
+        var cloudApiUrlBox = new TextBox
+        {
+            Header = T("cloudApiUrl"),
+            Text = GetStringSetting(CloudApiUrlSettingKey, ""),
+            PlaceholderText = "https://your-project-api.example.com",
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        var syncModeHint = new TextBlock
+        {
+            Foreground = (Brush)Resources["MutedTextBrush"],
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        void UpdateSyncModeFields()
+        {
+            var cloudMode = string.Equals(SelectedTag(syncModeBox, "Local"), "Cloud", StringComparison.OrdinalIgnoreCase);
+            cloudApiUrlBox.IsEnabled = cloudMode;
+            cloudApiUrlBox.Opacity = cloudMode ? 1 : 0.55;
+            syncModeHint.Text = cloudMode ? T("syncModeCloudHint") : T("syncModeLocalHint");
+        }
+
+        syncModeBox.SelectionChanged += (_, _) => UpdateSyncModeFields();
+        UpdateSyncModeFields();
+
         var autoSyncSwitch = new ToggleSwitch
         {
             Header = T("autoSyncMedia"),
@@ -398,6 +427,9 @@ public sealed partial class MainPage : Page
                 themeBox,
                 durationBox,
                 transcriptionLanguageBox,
+                syncModeBox,
+                cloudApiUrlBox,
+                syncModeHint,
                 autoSyncSwitch,
                 updatePanel
             }
@@ -422,21 +454,37 @@ public sealed partial class MainPage : Page
         var theme = SelectedTag(themeBox, "Light");
         var duration = SelectedTag(durationBox, "60");
         var transcriptionLanguage = SelectedTag(transcriptionLanguageBox, "auto");
+        var syncMode = NormalizeSyncMode(SelectedTag(syncModeBox, "Local"));
+        var cloudApiUrl = NormalizeApiBaseUrl(cloudApiUrlBox.Text);
+
+        if (syncMode == "Cloud" && string.IsNullOrWhiteSpace(cloudApiUrl))
+        {
+            StatusBox.Text = T("cloudApiUrlRequired");
+            return;
+        }
 
         SetSetting(AppLanguageSettingKey, appLanguage);
         SetSetting(ThemeSettingKey, theme);
         SetSetting(DefaultDurationSettingKey, duration);
         SetSetting(TranscriptionLanguageSettingKey, transcriptionLanguage);
+        SetSetting(SyncModeSettingKey, syncMode);
+        SetSetting(CloudApiUrlSettingKey, cloudApiUrl);
         SetSetting(AutoSyncMediaSettingKey, autoSyncSwitch.IsOn);
 
         ApplyThemeSetting(theme);
         ApplyLanguageSetting(appLanguage);
+        var apiChanged = ConfigureApiClientFromSettings(resetSession: true);
+        if (apiChanged)
+        {
+            ReturnToAuthScreen(T("syncModeChangedLoginAgain"));
+        }
+
         if (_selectedNoteId is null)
         {
             EndTimePicker.Time = TimeOnly.FromTimeSpan(StartTimePicker.Time).AddMinutes(GetDefaultDurationMinutes()).ToTimeSpan();
         }
 
-        StatusBox.Text = T("settingsSaved");
+        StatusBox.Text = apiChanged ? T("syncModeChangedLoginAgain") : T("settingsSaved");
     }
 
     private async Task SyncNowAsync()
@@ -2709,6 +2757,14 @@ public sealed partial class MainPage : Page
                 "languageUkrainian" => "Украинский",
                 "languageEnglish" => "Английский",
                 "autoSyncMedia" => "Синхронизировать после записи или фото",
+                "syncMode" => "Режим синхронизации",
+                "syncModeLocal" => "Локальный",
+                "syncModeCloud" => "Облачный",
+                "cloudApiUrl" => "Cloud API URL",
+                "syncModeLocalHint" => "Клиент будет ходить в локальный backend на localhost:5009. Это режим для одного ПК.",
+                "syncModeCloudHint" => "Клиент будет ходить в облачный backend. На других устройствах укажите этот же URL.",
+                "cloudApiUrlRequired" => "Для Cloud-режима нужен адрес backend API.",
+                "syncModeChangedLoginAgain" => "Режим синхронизации изменен. Войдите снова.",
                 "updates" => "\u041e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f",
                 "checkUpdates" => "\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f",
                 "updateNotChecked" => "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0435\u0449\u0451 \u043d\u0435 \u0437\u0430\u043f\u0443\u0441\u043a\u0430\u043b\u0430\u0441\u044c.",
@@ -2833,6 +2889,14 @@ public sealed partial class MainPage : Page
                 "languageUkrainian" => "Ukrainian",
                 "languageEnglish" => "English",
                 "autoSyncMedia" => "Auto sync after recording or photo",
+                "syncMode" => "Sync mode",
+                "syncModeLocal" => "Local",
+                "syncModeCloud" => "Cloud",
+                "cloudApiUrl" => "Cloud API URL",
+                "syncModeLocalHint" => "The client will use the local backend on localhost:5009. This is the single-PC mode.",
+                "syncModeCloudHint" => "The client will use a cloud backend. Use the same URL on other devices.",
+                "cloudApiUrlRequired" => "Cloud mode needs a backend API URL.",
+                "syncModeChangedLoginAgain" => "Sync mode changed. Sign in again.",
                 "updates" => "Updates",
                 "checkUpdates" => "Check GitHub updates",
                 "updateNotChecked" => "Update check has not run yet.",
@@ -2976,6 +3040,49 @@ public sealed partial class MainPage : Page
         }
 
         return fallback;
+    }
+
+    private bool ConfigureApiClientFromSettings(bool resetSession)
+    {
+        var baseUrl = ResolveApiBaseUrl();
+        return _api.SetBaseUrl(baseUrl, resetSession);
+    }
+
+    private string ResolveApiBaseUrl()
+    {
+        var syncMode = NormalizeSyncMode(GetStringSetting(SyncModeSettingKey, "Local"));
+        if (syncMode == "Cloud")
+        {
+            var cloudUrl = NormalizeApiBaseUrl(GetStringSetting(CloudApiUrlSettingKey, ""));
+            if (!string.IsNullOrWhiteSpace(cloudUrl))
+            {
+                return cloudUrl;
+            }
+        }
+
+        return LocalApiUrl;
+    }
+
+    private static string NormalizeSyncMode(string value)
+    {
+        return string.Equals(value, "Cloud", StringComparison.OrdinalIgnoreCase) ? "Cloud" : "Local";
+    }
+
+    private static string NormalizeApiBaseUrl(string value)
+    {
+        var trimmed = value.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return "";
+        }
+
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return "";
+        }
+
+        return uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
     }
 
     private static string GetStringSetting(string key, string fallback)
@@ -3197,5 +3304,15 @@ public sealed partial class MainPage : Page
         StatusBox.Text = status;
         SyncStateText.Text = _api.IsSignedIn ? T("ready") : T("offline");
         _ = CheckForUpdatesOnStartupAsync();
+    }
+
+    private void ReturnToAuthScreen(string status)
+    {
+        _selectedNoteId = null;
+        _resizeHandlesNoteId = null;
+        ClearMediaState();
+        AuthScreen.Visibility = Visibility.Visible;
+        AppShell.Visibility = Visibility.Collapsed;
+        AuthStatusBox.Text = status;
     }
 }
