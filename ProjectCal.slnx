@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/ProjectCal.Api/ProjectCal.Api.csproj" />
     <Project Path="src/ProjectCal.Client/ProjectCal.Client.csproj" />
+    <Project Path="src/ProjectCal.Launcher/ProjectCal.Launcher.csproj" />
     <Project Path="src/ProjectCal.Shared/ProjectCal.Shared.csproj" />
     <Project Path="src/ProjectCal.Worker/ProjectCal.Worker.csproj" />
   </Folder>
