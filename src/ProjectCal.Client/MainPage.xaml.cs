@@ -148,24 +148,14 @@ public sealed partial class MainPage : Page
     {
         await RunUiAsync(async () =>
         {
-            var note = await _store.UpsertNoteAsync(
-                _selectedNoteId,
-                TitleBox.Text,
-                GetBodyContent(),
-                SelectedDate(),
-                TimeOnly.FromTimeSpan(StartTimePicker.Time),
-                TimeOnly.FromTimeSpan(EndTimePicker.Time));
-
-            _selectedNoteId = note.Id;
-            SetTranscriptState(note);
-            StatusBox.Text = "Saved locally.";
-            SyncStateText.Text = "Local changes";
+            await SaveCurrentNoteDraftAsync(updateStatus: true, force: true);
             await ReloadAsync();
         });
     }
 
     private async void NewNote_Click(object sender, RoutedEventArgs e)
     {
+        await SaveCurrentNoteDraftAsync();
         StartNewNote(TimeOnly.FromTimeSpan(StartTimePicker.Time));
         await ReloadAsync();
     }
@@ -440,6 +430,7 @@ public sealed partial class MainPage : Page
 
     private async Task SyncNowAsync()
     {
+        await SaveCurrentNoteDraftAsync();
         SyncStateText.Text = "Syncing";
         SetMediaAction("Syncing notes and media...", true);
         var dirtyNotes = await _store.GetDirtyNotesAsync();
@@ -612,6 +603,7 @@ public sealed partial class MainPage : Page
 
         try
         {
+            await SaveCurrentNoteDraftAsync(dateOverride: _selectedDate);
             var year = SelectedInt(YearBox, _selectedDate.Year);
             var month = SelectedInt(MonthBox, _selectedDate.Month);
             var maxDay = DateTime.DaysInMonth(year, month);
@@ -810,6 +802,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        await SaveCurrentNoteDraftAsync();
         SetSelectedDate(note.Date, reload: true);
         SelectNote(note, $"{T("openedNote")} {note.Title}.");
         await LoadSelectedMediaAsync(note.Id);
@@ -1372,6 +1365,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        await SaveCurrentNoteDraftAsync();
         SelectNote(note, $"Selected {note.Title}.");
         await LoadSelectedMediaAsync(note.Id);
         await RefreshAllNotesPanelAsync();
@@ -1384,6 +1378,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        await SaveCurrentNoteDraftAsync();
         SelectNote(note, $"Resize handles enabled for {note.Title}.", showResizeHandles: true);
         await LoadSelectedMediaAsync(note.Id);
         await ReloadAsync();
@@ -1496,6 +1491,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        await SaveCurrentNoteDraftAsync();
         ClearSelectedNote(TimeOnly.FromTimeSpan(TimeSpan.FromHours(hour)));
         await ReloadAsync();
     }
@@ -1509,6 +1505,7 @@ public sealed partial class MainPage : Page
 
         await RunUiAsync(async () =>
         {
+            await SaveCurrentNoteDraftAsync();
             var startTime = new TimeOnly(hour, 0);
             var note = await _store.UpsertNoteAsync(
                 null,
@@ -1557,6 +1554,7 @@ public sealed partial class MainPage : Page
     {
         if (_selectedNoteId is not null)
         {
+            await SaveCurrentNoteDraftAsync();
             return;
         }
 
@@ -1571,6 +1569,55 @@ public sealed partial class MainPage : Page
 
         _selectedNoteId = note.Id;
         TitleBox.Text = note.Title;
+    }
+
+    private async Task<LocalNote?> SaveCurrentNoteDraftAsync(
+        bool updateStatus = false,
+        bool force = false,
+        DateOnly? dateOverride = null)
+    {
+        var body = GetBodyContent();
+        var title = TitleBox.Text;
+        var date = dateOverride ?? SelectedDate();
+        var start = TimeOnly.FromTimeSpan(StartTimePicker.Time);
+        var end = TimeOnly.FromTimeSpan(EndTimePicker.Time);
+
+        if (_selectedNoteId is null && IsEmptyDraft(title, body))
+        {
+            return null;
+        }
+
+        if (!force && _selectedNoteId is Guid selectedId)
+        {
+            var existing = await _store.GetNoteByIdAsync(selectedId);
+            if (existing is not null
+                && existing.DeletedAt is null
+                && string.Equals(existing.Title, title, StringComparison.Ordinal)
+                && string.Equals(existing.Body, body, StringComparison.Ordinal)
+                && existing.Date == date
+                && existing.StartTime == start
+                && Nullable.Equals(existing.EndTime, end))
+            {
+                return existing;
+            }
+        }
+
+        var note = await _store.UpsertNoteAsync(_selectedNoteId, title, body, date, start, end);
+        _selectedNoteId = note.Id;
+        SetTranscriptState(note);
+        SyncStateText.Text = "Local changes";
+        if (updateStatus)
+        {
+            StatusBox.Text = "Saved locally.";
+        }
+
+        return note;
+    }
+
+    private static bool IsEmptyDraft(string title, string body)
+    {
+        return string.IsNullOrWhiteSpace(title)
+            && string.IsNullOrWhiteSpace(PlainTextFromStoredBody(body));
     }
 
     private string GetBodyContent()
