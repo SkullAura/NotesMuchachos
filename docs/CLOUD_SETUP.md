@@ -38,7 +38,7 @@ Required environment variables:
 Database__Provider=Postgres
 SUPABASE_DB_CONNECTION_STRING=Host=...;Port=6543;Database=postgres;Username=postgres....;Password=...;SSL Mode=Require
 Storage__RootPath=/app/App_Data/media
-ASPNETCORE_URLS=http://+:8080
+ASPNETCORE_URLS=http://0.0.0.0:10000
 Jwt__Issuer=ProjectCal
 Jwt__Audience=ProjectCal.Client
 Jwt__SigningKey=replace-with-a-long-random-secret-at-least-32-bytes

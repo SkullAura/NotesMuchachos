@@ -10,7 +10,7 @@ RUN dotnet publish src/ProjectCal.Api/ProjectCal.Api.csproj -c Release -o /app/p
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
-ENV ASPNETCORE_URLS=http://+:8080
-EXPOSE 8080
+ENV ASPNETCORE_URLS=http://0.0.0.0:10000
+EXPOSE 10000
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "ProjectCal.Api.dll"]

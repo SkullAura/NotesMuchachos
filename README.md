@@ -65,6 +65,8 @@ dotnet run --project src\ProjectCal.Api\ProjectCal.Api.csproj --urls http://loca
 You can also use `DATABASE_URL=postgresql://...`; the app converts it to an Npgsql connection string and enables SSL.
 The API still stores uploaded media on the server filesystem. On Render Free that filesystem is temporary, so the next production step is Supabase Storage or S3-compatible object storage for durable photo/audio files.
 
+Render uses port `10000` by default for Docker web services. The API Dockerfile already binds to `http://0.0.0.0:10000`.
+
 For the full cloud sync checklist, see [`docs/CLOUD_SETUP.md`](docs/CLOUD_SETUP.md).
 For Oracle Cloud Always Free deployment, see [`docs/ORACLE_ALWAYS_FREE.md`](docs/ORACLE_ALWAYS_FREE.md).
 The Windows client must point to the deployed `ProjectCal.Api` backend, not directly to Supabase. For a private test build, set the hidden Windows environment variable `PROJECTCAL_API_URL` to the Render API URL before launching ProjectCal.

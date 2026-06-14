@@ -6,7 +6,7 @@ services:
     dockerfilePath: src/ProjectCal.Api/Dockerfile
     envVars:
       - key: ASPNETCORE_URLS
-        value: http://+:8080
+        value: http://0.0.0.0:10000
       - key: Database__Provider
         value: Postgres
       - key: Database__EnsureCreated
