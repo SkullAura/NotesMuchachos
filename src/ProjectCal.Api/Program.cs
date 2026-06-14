@@ -318,19 +318,39 @@ notes.MapPost("/{noteId:guid}/attachments", async (Guid noteId, IFormFile file, 
         return Results.NotFound();
     }
 
-    var attachment = new AttachmentEntity
+    var requestedAttachmentId = attachmentId ?? Guid.NewGuid();
+    var attachment = await db.Attachments.FirstOrDefaultAsync(x => x.Id == requestedAttachmentId && x.UserId == userId, ct);
+    if (attachment is not null && attachment.NoteId != noteId)
     {
-        Id = attachmentId ?? Guid.NewGuid(),
-        UserId = userId,
-        NoteId = noteId,
-        Type = type,
-        FileName = Path.GetFileName(file.FileName),
-        MimeType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
-        Size = file.Length
-    };
+        return Results.Conflict(new { error = "Attachment id already belongs to another note." });
+    }
 
-    attachment.StoredPath = await storage.SaveAsync(userId, attachment.Id, file, ct);
-    db.Attachments.Add(attachment);
+    if (attachment is null)
+    {
+        attachment = new AttachmentEntity
+        {
+            Id = requestedAttachmentId,
+            UserId = userId,
+            NoteId = noteId
+        };
+        db.Attachments.Add(attachment);
+    }
+
+    attachment.Type = type;
+    attachment.FileName = Path.GetFileName(file.FileName);
+    attachment.MimeType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
+    attachment.Size = file.Length;
+
+    var storedFileProbe = string.IsNullOrWhiteSpace(attachment.StoredPath) ? null : await storage.OpenAsync(attachment, ct);
+    if (storedFileProbe is not null)
+    {
+        await storedFileProbe.Value.Stream.DisposeAsync();
+    }
+
+    if (storedFileProbe is null)
+    {
+        attachment.StoredPath = await storage.SaveAsync(userId, attachment.Id, file, ct);
+    }
 
     if (type == AttachmentType.Audio)
     {

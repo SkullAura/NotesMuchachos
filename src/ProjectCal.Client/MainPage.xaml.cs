@@ -48,6 +48,8 @@ public sealed partial class MainPage : Page
     private MediaPlayer? _audioPlayer;
     private StorageFile? _recordingFile;
     private LocalAttachment? _selectedAudioAttachment;
+    private Guid? _loadedAudioAttachmentId;
+    private Guid? _expandedAudioAttachmentId;
     private LocalNote? _resizingNote;
     private FrameworkElement? _resizeVisual;
     private ResizeEdge _resizeEdge;
@@ -66,11 +68,19 @@ public sealed partial class MainPage : Page
         Bottom
     }
 
+    private enum AudioListCommand
+    {
+        Play,
+        Pause,
+        Stop
+    }
+
     private sealed record ResizeContext(LocalNote Note, FrameworkElement Host, ResizeEdge Edge);
     private sealed record TimelineLayout(LocalNote Note, LocalAttachmentSummary? AttachmentSummary, int Lane, int LaneCount);
     private sealed record StoredRichBody(string Format, string Plain, string Rtf);
     private sealed record UpdateCheckResult(bool Success, bool UpdateAvailable, string Message, string? LocalSha, string? RemoteSha);
     private sealed record AudioTranscriptSelection(LocalAttachment Attachment, LocalTranscript? Transcript);
+    private sealed record AudioControlContext(LocalAttachment Attachment, LocalTranscript? Transcript, AudioListCommand Command);
 
     public MainPage()
     {
@@ -2161,8 +2171,18 @@ public sealed partial class MainPage : Page
         var transcripts = await _store.GetTranscriptsForNoteAsync(noteId);
         var audioAttachments = attachments
             .Where(x => x.Type == AttachmentType.Audio && File.Exists(x.LocalPath))
+            .OrderByDescending(AudioSortTime)
             .ToArray();
-        _selectedAudioAttachment = audioAttachments.FirstOrDefault();
+        if (_expandedAudioAttachmentId is not null && audioAttachments.All(x => x.Id != _expandedAudioAttachmentId.Value))
+        {
+            _expandedAudioAttachmentId = null;
+        }
+
+        _selectedAudioAttachment = _selectedAudioAttachment is null
+            ? audioAttachments.FirstOrDefault()
+            : audioAttachments.FirstOrDefault(x => x.Id == _selectedAudioAttachment.Id) ?? audioAttachments.FirstOrDefault();
+
+        _expandedAudioAttachmentId ??= _selectedAudioAttachment?.Id;
 
         var hasAudio = _selectedAudioAttachment is not null;
         PlayAudioButton.IsEnabled = hasAudio;
@@ -2173,9 +2193,307 @@ public sealed partial class MainPage : Page
             : T("noAudioAttached");
         SetMediaAction(hasAudio ? "Audio ready. Choose a recording to play." : "Record audio or attach photos to this note.", false);
 
-        RenderAudioList(audioAttachments, transcripts);
+        RenderExpandableAudioList(audioAttachments, transcripts);
         RenderPhotos(attachments);
         UpdateMediaIndicator(attachments);
+    }
+
+    private void RenderExpandableAudioList(
+        IReadOnlyList<LocalAttachment> audioAttachments,
+        IReadOnlyDictionary<Guid, LocalTranscript> transcripts)
+    {
+        AudioListPanel.Children.Clear();
+        if (audioAttachments.Count == 0)
+        {
+            AudioListPanel.Children.Add(new Border
+            {
+                Padding = new Thickness(10),
+                Background = (Brush)Resources["PanelAltBrush"],
+                BorderBrush = (Brush)Resources["LineBrush"],
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Child = new TextBlock
+                {
+                    Text = "No audio recordings yet",
+                    Foreground = (Brush)Resources["MutedTextBrush"],
+                    TextWrapping = TextWrapping.Wrap
+                }
+            });
+            return;
+        }
+
+        for (var index = 0; index < audioAttachments.Count; index++)
+        {
+            var attachment = audioAttachments[index];
+            transcripts.TryGetValue(attachment.Id, out var transcript);
+            var title = $"Recording {index + 1} - {AudioSortTime(attachment).ToLocalTime():HH:mm}";
+            var status = AudioTranscriptStatusText(transcript);
+            var preview = AudioTranscriptPreviewText(transcript);
+            var isExpanded = _expandedAudioAttachmentId == attachment.Id;
+
+            var headerGrid = new Grid
+            {
+                ColumnSpacing = 8,
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                    new ColumnDefinition { Width = GridLength.Auto }
+                }
+            };
+            headerGrid.Children.Add(new StackPanel
+            {
+                Spacing = 2,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = $"{title} - {attachment.FileName}",
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        TextTrimming = TextTrimming.CharacterEllipsis
+                    },
+                    new TextBlock
+                    {
+                        Text = $"{status} - {preview}",
+                        Foreground = (Brush)Resources["MutedTextBrush"],
+                        FontSize = 12,
+                        MaxLines = 2,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                        TextWrapping = TextWrapping.Wrap
+                    }
+                }
+            });
+
+            var chevron = new FontIcon
+            {
+                Glyph = isExpanded ? "\uE70D" : "\uE76C",
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(chevron, 1);
+            headerGrid.Children.Add(chevron);
+
+            var headerButton = new Button
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Tag = new AudioTranscriptSelection(attachment, transcript),
+                Content = headerGrid
+            };
+
+            var controlRow = new Grid
+            {
+                ColumnSpacing = 8,
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+                }
+            };
+            var playButton = CreateAudioControlButton(Symbol.Play, "Play", new AudioControlContext(attachment, transcript, AudioListCommand.Play));
+            var pauseButton = CreateAudioControlButton(Symbol.Pause, "Pause", new AudioControlContext(attachment, transcript, AudioListCommand.Pause));
+            var stopButton = CreateAudioControlButton(Symbol.Stop, "Stop", new AudioControlContext(attachment, transcript, AudioListCommand.Stop));
+            Grid.SetColumn(pauseButton, 1);
+            Grid.SetColumn(stopButton, 2);
+            controlRow.Children.Add(playButton);
+            controlRow.Children.Add(pauseButton);
+            controlRow.Children.Add(stopButton);
+
+            var transcriptBox = new Border
+            {
+                Padding = new Thickness(10),
+                Background = (Brush)Resources["InputBrush"],
+                BorderBrush = (Brush)Resources["LineBrush"],
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(7),
+                Child = new TextBlock
+                {
+                    Text = preview,
+                    Foreground = (Brush)Resources["MutedTextBrush"],
+                    TextWrapping = TextWrapping.Wrap,
+                    IsTextSelectionEnabled = true,
+                    MaxLines = 8
+                }
+            };
+
+            var contentPanel = new StackPanel
+            {
+                Spacing = 8,
+                Visibility = isExpanded ? Visibility.Visible : Visibility.Collapsed,
+                Children =
+                {
+                    controlRow,
+                    new TextBlock
+                    {
+                        Text = "Transcript",
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        Foreground = (Brush)Resources["MutedTextBrush"],
+                        FontSize = 12
+                    },
+                    transcriptBox
+                }
+            };
+
+            headerButton.Click += (_, _) =>
+            {
+                var shouldOpen = _expandedAudioAttachmentId != attachment.Id;
+                _expandedAudioAttachmentId = shouldOpen ? attachment.Id : null;
+                SelectAudioTranscript(attachment, transcript, shouldOpen ? "Selected audio." : "Audio collapsed.");
+                RenderExpandableAudioList(audioAttachments, transcripts);
+            };
+
+            AudioListPanel.Children.Add(new Border
+            {
+                Padding = new Thickness(8),
+                Background = isExpanded ? (Brush)Resources["AccentSoftBrush"] : (Brush)Resources["PanelAltBrush"],
+                BorderBrush = isExpanded ? (Brush)Resources["AccentBrush"] : (Brush)Resources["LineBrush"],
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Child = new StackPanel
+                {
+                    Spacing = 8,
+                    Children =
+                    {
+                        headerButton,
+                        contentPanel
+                    }
+                }
+            });
+        }
+    }
+
+    private Button CreateAudioControlButton(Symbol symbol, string label, AudioControlContext context)
+    {
+        var button = new Button
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            MinHeight = 32,
+            Padding = new Thickness(8, 5, 8, 5),
+            Tag = context,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Children =
+                {
+                    new SymbolIcon(symbol),
+                    new TextBlock
+                    {
+                        Text = label,
+                        TextTrimming = TextTrimming.CharacterEllipsis
+                    }
+                }
+            }
+        };
+        button.Click += AudioControl_Click;
+        return button;
+    }
+
+    private static DateTime AudioSortTime(LocalAttachment attachment)
+    {
+        try
+        {
+            return File.GetCreationTimeUtc(attachment.LocalPath);
+        }
+        catch
+        {
+            return DateTime.MinValue;
+        }
+    }
+
+    private static string AudioTranscriptPreviewText(LocalTranscript? transcript)
+    {
+        if (!string.IsNullOrWhiteSpace(transcript?.Text))
+        {
+            return transcript.Text;
+        }
+
+        if (!string.IsNullOrWhiteSpace(transcript?.ErrorMessage))
+        {
+            return transcript.ErrorMessage;
+        }
+
+        return "Transcript will appear after sync.";
+    }
+
+    private string AudioTranscriptStatusText(LocalTranscript? transcript)
+    {
+        return transcript?.Status switch
+        {
+            TranscriptStatus.Pending => T("queued"),
+            TranscriptStatus.Processing => T("processing"),
+            TranscriptStatus.Done => T("ready"),
+            TranscriptStatus.Failed => T("failed"),
+            _ => T("noTranscriptYet")
+        };
+    }
+
+    private async void AudioControl_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: AudioControlContext context })
+        {
+            return;
+        }
+
+        await RunUiAsync(async () =>
+        {
+            SelectAudioTranscript(context.Attachment, context.Transcript, "Selected audio.");
+            _expandedAudioAttachmentId = context.Attachment.Id;
+
+            switch (context.Command)
+            {
+                case AudioListCommand.Play:
+                    await PlayAudioAttachmentAsync(context.Attachment);
+                    break;
+                case AudioListCommand.Pause:
+                    PauseAudioPlayback(context.Attachment);
+                    break;
+                case AudioListCommand.Stop:
+                    StopSelectedAudioPlayback(context.Attachment);
+                    break;
+            }
+        });
+    }
+
+    private void SelectAudioTranscript(LocalAttachment attachment, LocalTranscript? transcript, string message)
+    {
+        _selectedAudioAttachment = attachment;
+        PlayAudioButton.IsEnabled = true;
+        StopAudioButton.IsEnabled = true;
+        AudioStatusText.Text = $"Selected {attachment.FileName}";
+        SetTranscriptState(transcript);
+        SetMediaAction(message, false);
+    }
+
+    private void PauseAudioPlayback(LocalAttachment attachment)
+    {
+        _audioPlayer?.Pause();
+        AudioStatusText.Text = $"Paused: {attachment.FileName}";
+        SetMediaAction("Audio paused.", false);
+        StatusBox.Text = "Audio paused.";
+    }
+
+    private void StopSelectedAudioPlayback(LocalAttachment attachment)
+    {
+        if (_audioPlayer is not null && _loadedAudioAttachmentId == attachment.Id)
+        {
+            _audioPlayer.Pause();
+            try
+            {
+                _audioPlayer.PlaybackSession.Position = TimeSpan.Zero;
+            }
+            catch
+            {
+                _audioPlayer.Source = null;
+                _loadedAudioAttachmentId = null;
+            }
+        }
+
+        AudioStatusText.Text = $"Stopped: {attachment.FileName}";
+        SetMediaAction("Audio stopped.", false);
+        StatusBox.Text = "Audio stopped.";
     }
 
     private void RenderAudioList(
@@ -2301,11 +2619,16 @@ public sealed partial class MainPage : Page
             return;
         }
 
-        var file = await StorageFile.GetFileFromPathAsync(attachment.LocalPath);
         _audioPlayer ??= CreateAudioPlayer();
         AudioPlayerElement.SetMediaPlayer(_audioPlayer);
-        AudioPlayerElement.Visibility = Visibility.Visible;
-        _audioPlayer.Source = MediaSource.CreateFromStorageFile(file);
+        AudioPlayerElement.Visibility = Visibility.Collapsed;
+        if (_loadedAudioAttachmentId != attachment.Id || _audioPlayer.Source is null)
+        {
+            var file = await StorageFile.GetFileFromPathAsync(attachment.LocalPath);
+            _audioPlayer.Source = MediaSource.CreateFromStorageFile(file);
+            _loadedAudioAttachmentId = attachment.Id;
+        }
+
         _audioPlayer.Play();
         AudioStatusText.Text = $"{T("playingAudio")}: {attachment.FileName}";
         SetMediaAction(T("playingAudio"), false);
@@ -2316,6 +2639,7 @@ public sealed partial class MainPage : Page
     {
         StopAudioPlayback();
         _selectedAudioAttachment = null;
+        _expandedAudioAttachmentId = null;
         PlayAudioButton.IsEnabled = false;
         StopAudioButton.IsEnabled = false;
         AudioPlayerElement.Visibility = Visibility.Collapsed;
@@ -2429,6 +2753,19 @@ public sealed partial class MainPage : Page
         MediaActionText.Text = message;
         MediaActionRing.IsActive = busy;
         MediaActionRing.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ClearMediaAction()
+    {
+        if (MediaActionBorder is null)
+        {
+            return;
+        }
+
+        MediaActionBorder.Visibility = Visibility.Collapsed;
+        MediaActionText.Text = "";
+        MediaActionRing.IsActive = false;
+        MediaActionRing.Visibility = Visibility.Collapsed;
     }
 
     private ComboBox SettingComboBox(string header, (string Label, string Value)[] items, string selectedValue)
@@ -3299,6 +3636,7 @@ public sealed partial class MainPage : Page
             _audioPlayer.Source = null;
         }
 
+        _loadedAudioAttachmentId = null;
         AudioPlayerElement.Visibility = Visibility.Collapsed;
     }
 
@@ -3471,7 +3809,7 @@ public sealed partial class MainPage : Page
         {
             StatusBox.Text = ex.Message;
             SyncStateText.Text = "Issue";
-            SetMediaAction(ex.Message, false);
+            ClearMediaAction();
         }
     }
 

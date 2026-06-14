@@ -765,7 +765,17 @@
                                                     TextWrapping="Wrap" />
                                             </Grid>
 
-                                            <Grid ColumnSpacing="8">
+                                            <TextBlock
+                                                Foreground="{StaticResource InkBrush}"
+                                                FontSize="13"
+                                                FontWeight="SemiBold"
+                                                Text="Audio files" />
+
+                                            <StackPanel
+                                                x:Name="AudioListPanel"
+                                                Spacing="8" />
+
+                                            <Grid ColumnSpacing="8" Visibility="Collapsed">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
@@ -797,14 +807,10 @@
 
                                             <MediaPlayerElement
                                                 x:Name="AudioPlayerElement"
-                                                Height="74"
-                                                AreTransportControlsEnabled="True"
+                                                Height="0"
+                                                AreTransportControlsEnabled="False"
                                                 AutoPlay="False"
                                                 Visibility="Collapsed" />
-
-                                            <StackPanel
-                                                x:Name="AudioListPanel"
-                                                Spacing="6" />
                                         </StackPanel>
                                     </Border>
 
@@ -830,7 +836,8 @@
                                         Background="{StaticResource PanelAltBrush}"
                                         BorderBrush="#A8E3DF"
                                         BorderThickness="1"
-                                        CornerRadius="8">
+                                        CornerRadius="8"
+                                        Visibility="Collapsed">
                                         <StackPanel Spacing="8">
                                             <Grid ColumnSpacing="8">
                                                 <Grid.ColumnDefinitions>
