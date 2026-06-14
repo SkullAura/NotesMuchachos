@@ -34,7 +34,7 @@ public sealed partial class MainPage : Page
     private const string AutoSyncMediaSettingKey = "settings_auto_sync_media";
     private const string LocalApiUrl = "http://localhost:5009";
     private const string ManagedCloudApiUrl = "";
-    private const string UpdateBranch = "first-ui-update";
+    private const string UpdateBranch = "render-cloud-groq";
     private const string UpdateCommitUrl = "https://api.github.com/repos/SkullAura/NotesMuchachos/commits/" + UpdateBranch;
 
     private readonly LocalNoteStore _store = new();
@@ -2268,6 +2268,16 @@ public sealed partial class MainPage : Page
             var shortLocal = ShortSha(localSha);
 
             if (string.IsNullOrWhiteSpace(localSha))
+            {
+                return new UpdateCheckResult(
+                    true,
+                    false,
+                    $"{T("latestGithubVersion")}: {shortRemote}. {T("currentBuildUnknown")}",
+                    localSha,
+                    remoteSha);
+            }
+
+            if (string.Equals(localSha, "local", StringComparison.OrdinalIgnoreCase))
             {
                 return new UpdateCheckResult(
                     true,

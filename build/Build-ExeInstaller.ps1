@@ -10,6 +10,16 @@ $repo = Split-Path -Parent $PSScriptRoot
 $outputRootPath = Join-Path $repo $OutputRoot
 $inputPath = Join-Path $outputRootPath "input"
 $outputPath = Join-Path $outputRootPath "output"
+$gitCommit = "local"
+try {
+    $gitCommit = (& git -C $repo rev-parse HEAD).Trim()
+    if (-not $gitCommit) {
+        $gitCommit = "local"
+    }
+}
+catch {
+    $gitCommit = "local"
+}
 
 function Invoke-Checked {
     param(
@@ -60,7 +70,8 @@ Invoke-Checked dotnet @(
     "/p:WindowsPackageType=None",
     "/p:WindowsAppSDKSelfContained=true",
     "/p:PublishSingleFile=false",
-    "/p:PublishTrimmed=false"
+    "/p:PublishTrimmed=false",
+    "/p:GitCommit=$gitCommit"
 )
 
 Invoke-Checked dotnet @(

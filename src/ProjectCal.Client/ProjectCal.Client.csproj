@@ -13,7 +13,12 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GitCommit Condition="'$(GitCommit)' == ''">local</GitCommit>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="GitCommit" Value="$(GitCommit)" />
+  </ItemGroup>
 
   <PropertyGroup Condition="'$(ProjectCalExeInstaller)' == 'true'">
     <WindowsPackageType>None</WindowsPackageType>
