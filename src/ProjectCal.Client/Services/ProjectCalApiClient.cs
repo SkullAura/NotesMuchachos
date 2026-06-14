@@ -176,12 +176,33 @@ public sealed class ProjectCalApiClient
             using var document = JsonDocument.Parse(body);
             if (document.RootElement.TryGetProperty("error", out var error))
             {
-                return error.GetString();
+                var errorText = error.GetString();
+                if (!string.Equals(errorText, "Internal server error.", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(errorText, "Internal server error", StringComparison.OrdinalIgnoreCase))
+                {
+                    return errorText;
+                }
             }
 
             if (document.RootElement.TryGetProperty("message", out var message))
             {
                 return message.GetString();
+            }
+
+            if (document.RootElement.TryGetProperty("detail", out var detail))
+            {
+                var detailText = detail.GetString();
+                if (!string.IsNullOrWhiteSpace(detailText))
+                {
+                    return detailText;
+                }
+            }
+
+            if (document.RootElement.TryGetProperty("inner", out var inner)
+                && inner.ValueKind == JsonValueKind.Array
+                && inner.GetArrayLength() > 0)
+            {
+                return inner[0].GetString();
             }
         }
         catch (JsonException)

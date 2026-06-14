@@ -578,9 +578,9 @@ public sealed partial class MainPage : Page
             note.StartTime,
             note.EndTime,
             note.SyncVersion,
-            note.TranscriptText,
-            note.TranscriptStatus,
-            GetSelectedLanguage());
+            null,
+            null,
+            null);
     }
 
     private async Task PullTranscriptionUpdatesAsync()
