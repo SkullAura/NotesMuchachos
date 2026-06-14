@@ -33,7 +33,7 @@ public sealed partial class MainPage : Page
     private const string TranscriptionLanguageSettingKey = "settings_transcription_language";
     private const string AutoSyncMediaSettingKey = "settings_auto_sync_media";
     private const string LocalApiUrl = "http://localhost:5009";
-    private const string ManagedCloudApiUrl = "";
+    private const string ManagedCloudApiUrl = "https://notesmuchachos.onrender.com";
     private const string UpdateBranch = "render-cloud-groq";
     private const string UpdateCommitUrl = "https://api.github.com/repos/SkullAura/NotesMuchachos/commits/" + UpdateBranch;
 

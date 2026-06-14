@@ -89,6 +89,8 @@ The development auth endpoints return email confirmation and password reset toke
 
 ## Windows EXE installer
 
+For users: download `NotesMuchachosSetup.exe` from the latest GitHub Release and run it. The app connects to the managed NotesMuchachos cloud API automatically.
+
 This branch can build a traditional Windows installer:
 
 ```powershell

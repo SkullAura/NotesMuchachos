@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 
-const string ManagedCloudApiUrl = "";
+const string ManagedCloudApiUrl = "https://notesmuchachos.onrender.com";
 
 var root = AppContext.BaseDirectory;
 var logs = Path.Combine(

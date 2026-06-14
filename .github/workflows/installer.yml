@@ -3,7 +3,7 @@ name: NotesMuchachos Installer
 on:
   workflow_dispatch:
   push:
-    branches: [exe-installer]
+    branches: [main, render-cloud-groq]
     tags: ["v*"]
 
 permissions:
