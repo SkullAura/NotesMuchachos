@@ -381,54 +381,25 @@ public sealed partial class MainPage : Page
             }
         };
 
-        var testUpdaterButton = new Button
-        {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Content = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
-                Children =
-                {
-                    new SymbolIcon(Symbol.Repair),
-                    new TextBlock { Text = T("testUpdater") }
-                }
-            }
-        };
-
         UpdateCheckResult? latestUpdateResult = null;
         checkUpdatesButton.Click += async (_, _) =>
         {
             checkUpdatesButton.IsEnabled = false;
             installUpdateButton.IsEnabled = false;
-            testUpdaterButton.IsEnabled = false;
             updateStatusText.Text = T("checkingUpdates");
             var result = await CheckForUpdatesAsync();
             latestUpdateResult = result;
             updateStatusText.Text = result.Message;
             checkUpdatesButton.IsEnabled = true;
             installUpdateButton.IsEnabled = result.Success && result.UpdateAvailable;
-            testUpdaterButton.IsEnabled = true;
         };
         installUpdateButton.Click += async (_, _) =>
         {
             checkUpdatesButton.IsEnabled = false;
             installUpdateButton.IsEnabled = false;
-            testUpdaterButton.IsEnabled = false;
             updateStatusText.Text = T("downloadingUpdate");
             updateStatusText.Text = await DownloadAndLaunchUpdateInstallerAsync(latestUpdateResult);
             checkUpdatesButton.IsEnabled = true;
-            testUpdaterButton.IsEnabled = true;
-        };
-        testUpdaterButton.Click += async (_, _) =>
-        {
-            checkUpdatesButton.IsEnabled = false;
-            installUpdateButton.IsEnabled = false;
-            testUpdaterButton.IsEnabled = false;
-            updateStatusText.Text = T("downloadingTestUpdate");
-            updateStatusText.Text = await DownloadAndLaunchUpdateInstallerAsync(latestUpdateResult, forceInstallLatest: true);
-            checkUpdatesButton.IsEnabled = true;
-            testUpdaterButton.IsEnabled = true;
         };
 
         var updatePanel = new StackPanel
@@ -444,7 +415,6 @@ public sealed partial class MainPage : Page
                 },
                 checkUpdatesButton,
                 installUpdateButton,
-                testUpdaterButton,
                 updateStatusText
             }
         };
@@ -3054,7 +3024,7 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private async Task<string> DownloadAndLaunchUpdateInstallerAsync(UpdateCheckResult? knownResult, bool forceInstallLatest = false)
+    private async Task<string> DownloadAndLaunchUpdateInstallerAsync(UpdateCheckResult? knownResult)
     {
         try
         {
@@ -3064,12 +3034,12 @@ public sealed partial class MainPage : Page
                 result = await CheckForUpdatesAsync();
             }
 
-            if (!forceInstallLatest && !result.Success)
+            if (!result.Success)
             {
                 return result.Message;
             }
 
-            if (!forceInstallLatest && !result.UpdateAvailable)
+            if (!result.UpdateAvailable)
             {
                 return result.Message;
             }
@@ -3615,11 +3585,9 @@ public sealed partial class MainPage : Page
                 "updates" => "\u041e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f",
                 "checkUpdates" => "\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f",
                 "installUpdate" => "\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435",
-                "testUpdater" => "\u0422\u0435\u0441\u0442 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f",
                 "updateNotChecked" => "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0435\u0449\u0451 \u043d\u0435 \u0437\u0430\u043f\u0443\u0441\u043a\u0430\u043b\u0430\u0441\u044c.",
                 "checkingUpdates" => "\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u044e GitHub...",
                 "downloadingUpdate" => "\u0421\u043a\u0430\u0447\u0438\u0432\u0430\u044e \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435...",
-                "downloadingTestUpdate" => "\u0422\u0435\u0441\u0442: \u0441\u043a\u0430\u0447\u0438\u0432\u0430\u044e \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0449\u0438\u043a...",
                 "installerStarted" => "\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0449\u0438\u043a \u0437\u0430\u043f\u0443\u0449\u0435\u043d. \u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u0441\u0435\u0439\u0447\u0430\u0441 \u0437\u0430\u043a\u0440\u043e\u0435\u0442\u0441\u044f.",
                 "updateInstallFailed" => "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435",
                 "installerAssetMissing" => "\u0412 GitHub Release \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d NotesMuchachosSetup.exe.",
@@ -3747,11 +3715,9 @@ public sealed partial class MainPage : Page
                 "updates" => "Updates",
                 "checkUpdates" => "Check GitHub updates",
                 "installUpdate" => "Install update",
-                "testUpdater" => "Test updater",
                 "updateNotChecked" => "Update check has not run yet.",
                 "checkingUpdates" => "Checking GitHub...",
                 "downloadingUpdate" => "Downloading update...",
-                "downloadingTestUpdate" => "Test: downloading latest installer...",
                 "installerStarted" => "Installer started. The app will close now.",
                 "updateInstallFailed" => "Could not install update",
                 "installerAssetMissing" => "NotesMuchachosSetup.exe was not found in the GitHub Release.",
