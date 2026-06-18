@@ -101,6 +101,7 @@ public sealed partial class MainPage : Page
 
     private async void MainPage_Loaded(object sender, RoutedEventArgs e)
     {
+        ApplyThemeSetting(GetStringSetting(ThemeSettingKey, "Light"));
         await _store.InitializeAsync();
         AuthStatusBox.Text = T("checkingSession");
         if (await _api.TryRestoreSessionAsync())

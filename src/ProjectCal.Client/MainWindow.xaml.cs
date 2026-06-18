@@ -21,7 +21,7 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         ApplyWindowIcon();
-        ApplyTitleBarTheme(dark: false);
+        ApplyTitleBarTheme(dark: true);
         RootFrame.Navigate(typeof(MainPage));
     }
 
