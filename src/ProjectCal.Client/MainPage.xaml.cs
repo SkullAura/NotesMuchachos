@@ -2328,6 +2328,17 @@ public sealed partial class MainPage : Page
                 Text = AudioDisplayName(attachment, index),
                 PlaceholderText = "Audio name"
             };
+            nameBox.KeyDown += async (_, e) =>
+            {
+                if (e.Key != VirtualKey.Enter)
+                {
+                    return;
+                }
+
+                e.Handled = true;
+                await SaveAudioNameFromBoxAsync(attachment, nameBox, audioAttachments, transcripts);
+            };
+
             var saveNameButton = new Button
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -2335,12 +2346,7 @@ public sealed partial class MainPage : Page
             };
             saveNameButton.Click += async (_, _) =>
             {
-                await RunUiAsync(async () =>
-                {
-                    await RenameAudioAttachmentAsync(attachment, nameBox.Text);
-                    attachment.FileName = NormalizeAudioFileName(nameBox.Text, attachment);
-                    RenderExpandableAudioList(audioAttachments, transcripts);
-                });
+                await SaveAudioNameFromBoxAsync(attachment, nameBox, audioAttachments, transcripts);
             };
 
             var transcriptBox = new Border
@@ -2455,6 +2461,20 @@ public sealed partial class MainPage : Page
         attachment.FileName = normalized;
         AudioStatusText.Text = $"Selected {AudioStatusName(attachment)}";
         StatusBox.Text = "Audio name saved.";
+    }
+
+    private async Task SaveAudioNameFromBoxAsync(
+        LocalAttachment attachment,
+        TextBox nameBox,
+        IReadOnlyList<LocalAttachment> audioAttachments,
+        IReadOnlyDictionary<Guid, LocalTranscript> transcripts)
+    {
+        await RunUiAsync(async () =>
+        {
+            await RenameAudioAttachmentAsync(attachment, nameBox.Text);
+            attachment.FileName = NormalizeAudioFileName(nameBox.Text, attachment);
+            RenderExpandableAudioList(audioAttachments, transcripts);
+        });
     }
 
     private static string AudioDisplayName(LocalAttachment attachment, int index)
