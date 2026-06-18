@@ -104,6 +104,8 @@ public static class DatabaseInitializer
             ALTER TABLE "Transcripts" ADD COLUMN IF NOT EXISTS "ErrorMessage" text NULL;
             ALTER TABLE "Transcripts" ADD COLUMN IF NOT EXISTS "Attempts" integer NOT NULL DEFAULT 0;
 
+            DROP INDEX IF EXISTS "IX_Transcripts_NoteId";
+
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_Users_NormalizedEmail" ON "Users" ("NormalizedEmail");
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_RefreshTokens_TokenHash" ON "RefreshTokens" ("TokenHash");
             CREATE INDEX IF NOT EXISTS "IX_Notes_UserId_Date_StartTime" ON "Notes" ("UserId", "Date", "StartTime");
