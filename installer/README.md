@@ -2,6 +2,11 @@
 
 This branch builds a traditional Windows `NotesMuchachosSetup.exe` installer.
 
+The installer lets the user choose the install directory. After installation,
+the app folder contains the standard Inno Setup uninstaller plus an
+`Uninstall NotesMuchachos` shortcut, and the Start Menu also gets an uninstall
+shortcut.
+
 ## Build
 
 Install Inno Setup 6:

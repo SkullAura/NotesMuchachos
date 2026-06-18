@@ -14,7 +14,9 @@ AppVersion={#AppVersion}
 AppPublisher=NotesMuchachos
 DefaultDirName={autopf}\NotesMuchachos
 DefaultGroupName=NotesMuchachos
+DisableDirPage=no
 DisableProgramGroupPage=yes
+AlwaysShowDirOnReadyPage=yes
 OutputDir={#OutputDir}
 OutputBaseFilename=NotesMuchachosSetup
 Compression=lzma2
@@ -22,6 +24,8 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile={#SourceDir}\NotesMuchachos.ico
+UninstallDisplayIcon={app}\NotesMuchachos.ico
+UninstallFilesDir={app}
 WizardStyle=modern
 
 [Languages]
@@ -35,7 +39,9 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 
 [Icons]
 Name: "{group}\NotesMuchachos"; Filename: "{app}\ProjectCal.Launcher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\NotesMuchachos.ico"
+Name: "{group}\Uninstall NotesMuchachos"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\NotesMuchachos"; Filename: "{app}\ProjectCal.Launcher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\NotesMuchachos.ico"; Tasks: desktopicon
+Name: "{app}\Uninstall NotesMuchachos"; Filename: "{uninstallexe}"
 
 [Run]
 Filename: "{app}\ProjectCal.Launcher.exe"; Description: "Launch NotesMuchachos"; Flags: nowait postinstall skipifsilent
