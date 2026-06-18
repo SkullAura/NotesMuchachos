@@ -184,6 +184,13 @@ public sealed class ProjectCalApiClient
                 }
             }
 
+            if (document.RootElement.TryGetProperty("inner", out var inner)
+                && inner.ValueKind == JsonValueKind.Array
+                && inner.GetArrayLength() > 0)
+            {
+                return inner[inner.GetArrayLength() - 1].GetString();
+            }
+
             if (document.RootElement.TryGetProperty("message", out var message))
             {
                 return message.GetString();
@@ -196,13 +203,6 @@ public sealed class ProjectCalApiClient
                 {
                     return detailText;
                 }
-            }
-
-            if (document.RootElement.TryGetProperty("inner", out var inner)
-                && inner.ValueKind == JsonValueKind.Array
-                && inner.GetArrayLength() > 0)
-            {
-                return inner[0].GetString();
             }
         }
         catch (JsonException)

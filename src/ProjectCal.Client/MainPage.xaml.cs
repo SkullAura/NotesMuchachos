@@ -493,8 +493,31 @@ public sealed partial class MainPage : Page
             }
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                await EnsureServerNoteForAttachmentAsync(attachment.NoteId);
-                await _api.UploadAttachmentAsync(attachment, GetSelectedLanguage());
+                try
+                {
+                    await EnsureServerNoteForAttachmentAsync(attachment.NoteId);
+                    await _api.UploadAttachmentAsync(attachment, GetSelectedLanguage());
+                }
+                catch (HttpRequestException retryEx)
+                {
+                    skippedMedia++;
+                    if (attachment.Type == AttachmentType.Audio)
+                    {
+                        await _store.UpdateTranscriptAsync(attachment.NoteId, attachment.Id, retryEx.Message, TranscriptStatus.Failed);
+                    }
+
+                    continue;
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                skippedMedia++;
+                if (attachment.Type == AttachmentType.Audio)
+                {
+                    await _store.UpdateTranscriptAsync(attachment.NoteId, attachment.Id, ex.Message, TranscriptStatus.Failed);
+                }
+
+                continue;
             }
 
             await _store.MarkAttachmentUploadedAsync(attachment.Id);
