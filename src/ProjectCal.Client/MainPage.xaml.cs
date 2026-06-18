@@ -2339,16 +2339,6 @@ public sealed partial class MainPage : Page
                 await SaveAudioNameFromBoxAsync(attachment, nameBox, audioAttachments, transcripts);
             };
 
-            var saveNameButton = new Button
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Content = "Save name"
-            };
-            saveNameButton.Click += async (_, _) =>
-            {
-                await SaveAudioNameFromBoxAsync(attachment, nameBox, audioAttachments, transcripts);
-            };
-
             var transcriptBox = new Border
             {
                 Padding = new Thickness(10),
@@ -2373,7 +2363,6 @@ public sealed partial class MainPage : Page
                 Children =
                 {
                     nameBox,
-                    saveNameButton,
                     controlRow,
                     new TextBlock
                     {
