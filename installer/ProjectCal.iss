@@ -1,4 +1,4 @@
-#define AppName "NotesMuchachos"
+#define AppName "DayScribe"
 #define AppVersion "1.0.0"
 #ifndef SourceDir
 #define SourceDir "..\artifacts\installer\input"
@@ -11,20 +11,20 @@
 AppId={{6B4FEF6F-835D-4B0F-A1F7-2F59F20D4117}
 AppName={#AppName}
 AppVersion={#AppVersion}
-AppPublisher=NotesMuchachos
-DefaultDirName={autopf}\NotesMuchachos
-DefaultGroupName=NotesMuchachos
+AppPublisher=DayScribe
+DefaultDirName={autopf}\DayScribe
+DefaultGroupName=DayScribe
 DisableDirPage=no
 DisableProgramGroupPage=yes
 AlwaysShowDirOnReadyPage=yes
 OutputDir={#OutputDir}
-OutputBaseFilename=NotesMuchachosSetup
+OutputBaseFilename=DayScribeSetup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-SetupIconFile={#SourceDir}\NotesMuchachos.ico
-UninstallDisplayIcon={app}\NotesMuchachos.ico
+SetupIconFile={#SourceDir}\DayScribe.ico
+UninstallDisplayIcon={app}\DayScribe.ico
 UninstallFilesDir={app}
 WizardStyle=modern
 
@@ -38,10 +38,10 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\NotesMuchachos"; Filename: "{app}\ProjectCal.Launcher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\NotesMuchachos.ico"
-Name: "{group}\Uninstall NotesMuchachos"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\NotesMuchachos"; Filename: "{app}\ProjectCal.Launcher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\NotesMuchachos.ico"; Tasks: desktopicon
-Name: "{app}\Uninstall NotesMuchachos"; Filename: "{uninstallexe}"
+Name: "{group}\DayScribe"; Filename: "{app}\ProjectCal.Launcher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\DayScribe.ico"
+Name: "{group}\Uninstall DayScribe"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\DayScribe"; Filename: "{app}\ProjectCal.Launcher.exe"; WorkingDir: "{app}"; IconFilename: "{app}\DayScribe.ico"; Tasks: desktopicon
+Name: "{app}\Uninstall DayScribe"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{app}\ProjectCal.Launcher.exe"; Description: "Launch NotesMuchachos"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\ProjectCal.Launcher.exe"; Description: "Launch DayScribe"; Flags: nowait postinstall skipifsilent

@@ -59,8 +59,8 @@ ssh -i C:\path\to\oracle-key.key ubuntu@YOUR_ORACLE_PUBLIC_IP
 On the VM:
 
 ```bash
-git clone https://github.com/SkullAura/NotesMuchachos.git
-cd NotesMuchachos
+git clone https://github.com/SkullAura/NotesMuchachos.git DayScribe
+cd DayScribe
 git checkout exe-installer
 chmod +x deploy/oracle/install-docker-ubuntu.sh
 ./deploy/oracle/install-docker-ubuntu.sh
@@ -73,7 +73,7 @@ Log out and SSH back in so Docker group permissions apply.
 Create `.env` on the VM:
 
 ```bash
-cd NotesMuchachos
+cd DayScribe
 cp deploy/cloud.env.example .env
 nano .env
 ```
@@ -139,7 +139,7 @@ Use the same `Cloud API URL` on another device.
 ## 8. Updating the server later
 
 ```bash
-cd NotesMuchachos
+cd DayScribe
 git pull
 docker compose -f deploy/oracle/docker-compose.oracle.yml --env-file .env up -d --build
 ```

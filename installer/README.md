@@ -1,10 +1,10 @@
-# NotesMuchachos EXE installer
+# DayScribe EXE installer
 
-This branch builds a traditional Windows `NotesMuchachosSetup.exe` installer.
+This branch builds a traditional Windows `DayScribeSetup.exe` installer.
 
 The installer lets the user choose the install directory. After installation,
 the app folder contains the standard Inno Setup uninstaller plus an
-`Uninstall NotesMuchachos` shortcut, and the Start Menu also gets an uninstall
+`Uninstall DayScribe` shortcut, and the Start Menu also gets an uninstall
 shortcut.
 
 ## Build
@@ -24,7 +24,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build\Build-ExeInstaller.p
 The installer will be created at:
 
 ```text
-artifacts\installer\output\NotesMuchachosSetup.exe
+artifacts\installer\output\DayScribeSetup.exe
 ```
 
 If Inno Setup is not installed, the script still prepares the installable app files at:

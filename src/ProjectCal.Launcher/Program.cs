@@ -1,16 +1,19 @@
 using System.Diagnostics;
 using System.Net;
 
+const string AppName = "DayScribe";
+const string LegacyAppName = "NotesMuchachos";
 const string ManagedCloudApiUrl = "https://notesmuchachos.onrender.com";
 
 var root = AppContext.BaseDirectory;
+MigrateLegacyAppData();
 var logs = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "NotesMuchachos",
+    AppName,
     "logs");
 var data = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "NotesMuchachos",
+    AppName,
     "data");
 var media = Path.Combine(data, "media");
 Directory.CreateDirectory(logs);
@@ -24,7 +27,7 @@ var managedApiUrl = ResolveManagedApiUrl();
 
 if (!File.Exists(apiExe) || !File.Exists(workerExe) || !File.Exists(clientExe))
 {
-    MessageBox("NotesMuchachos installation is incomplete. Reinstall the application.");
+    MessageBox("DayScribe installation is incomplete. Reinstall the application.");
     return 1;
 }
 
@@ -66,7 +69,7 @@ void StartHidden(string fileName, string arguments, string logName, bool startOn
 
     var logs = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "NotesMuchachos",
+        AppName,
         "logs");
 
     var startInfo = new ProcessStartInfo
@@ -111,6 +114,25 @@ static string ResolveManagedApiUrl()
         ?? ManagedCloudApiUrl;
 }
 
+static void MigrateLegacyAppData()
+{
+    var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+    var legacyRoot = Path.Combine(localAppData, LegacyAppName);
+    var newRoot = Path.Combine(localAppData, AppName);
+    if (!Directory.Exists(legacyRoot) || Directory.Exists(newRoot))
+    {
+        return;
+    }
+
+    try
+    {
+        Directory.Move(legacyRoot, newRoot);
+    }
+    catch
+    {
+    }
+}
+
 static async Task WaitForApiAsync()
 {
     for (var attempt = 0; attempt < 20; attempt++)
@@ -140,7 +162,7 @@ static async Task<bool> IsApiReadyAsync()
 
 static void MessageBox(string text)
 {
-    _ = NativeMethods.MessageBox(IntPtr.Zero, text, "NotesMuchachos", 0x00000010);
+    _ = NativeMethods.MessageBox(IntPtr.Zero, text, AppName, 0x00000010);
 }
 
 internal static class ProcessExtensions

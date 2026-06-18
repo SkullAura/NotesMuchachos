@@ -1,4 +1,4 @@
-# NotesMuchachos cloud sync setup
+# DayScribe cloud sync setup
 
 This guide prepares the shared backend used by the Windows app. Users do not see database URLs or transcription keys; the app talks only to ProjectCal.Api.
 
@@ -15,7 +15,7 @@ Never commit real secrets to this repository.
 ## 2. Supabase database
 
 1. Open Supabase.
-2. Select the NotesMuchachos project.
+2. Select the DayScribe project.
 3. Go to `Project Settings -> Database`.
 4. Copy the pooled Postgres connection string.
 5. Keep it private. It will be used as `SUPABASE_DB_CONNECTION_STRING`.
@@ -75,20 +75,20 @@ For private testing, set the hidden API URL on Windows:
 [Environment]::SetEnvironmentVariable("PROJECTCAL_API_URL", "https://YOUR_RENDER_SERVICE.onrender.com", "User")
 ```
 
-Restart NotesMuchachos after changing it.
+Restart DayScribe after changing it.
 
 Do not put the Supabase URL here. The app talks to ProjectCal.Api, and ProjectCal.Api talks to Supabase.
 
 ## 6. GitHub installer build
 
-The workflow `.github/workflows/installer.yml` builds `NotesMuchachosSetup.exe`.
+The workflow `.github/workflows/installer.yml` builds `DayScribeSetup.exe`.
 
 Manual build:
 
 1. GitHub -> `Actions`.
-2. Open `NotesMuchachos Installer`.
+2. Open `DayScribe Installer`.
 3. Click `Run workflow`.
-4. Download the `NotesMuchachosSetup` artifact.
+4. Download the `DayScribeSetup` artifact.
 
 Release build:
 
@@ -97,4 +97,4 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-GitHub will create a release with `NotesMuchachosSetup.exe`.
+GitHub will create a release with `DayScribeSetup.exe`.

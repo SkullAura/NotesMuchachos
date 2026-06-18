@@ -136,7 +136,7 @@
                             Foreground="{StaticResource InkBrush}"
                             FontSize="32"
                             FontWeight="SemiBold"
-                            Text="NotesMuchachos" />
+                            Text="DayScribe" />
                         <TextBlock
                             x:Name="AuthSubtitleText"
                             Foreground="{StaticResource MutedTextBrush}"
@@ -289,12 +289,12 @@
                             Foreground="{StaticResource InkBrush}"
                             FontSize="26"
                             FontWeight="SemiBold"
-                            Text="NotesMuchachos" />
+                            Text="DayScribe" />
                         <TextBlock
                             x:Name="UserLabel"
                             Foreground="{StaticResource MutedTextBrush}"
                             FontSize="13"
-                            Text="Calendar-first notes" />
+                            Text="Calendar-first notes and voice" />
                     </StackPanel>
 
                     <StackPanel Grid.Row="1" Spacing="10">

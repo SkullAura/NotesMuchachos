@@ -37,7 +37,7 @@ public sealed partial class MainPage : Page
     private const string UpdateBranch = "main";
     private const string UpdateCommitUrl = "https://api.github.com/repos/SkullAura/NotesMuchachos/commits/" + UpdateBranch;
     private const string UpdateLatestReleaseUrl = "https://api.github.com/repos/SkullAura/NotesMuchachos/releases/latest";
-    private const string UpdateInstallerAssetName = "NotesMuchachosSetup.exe";
+    private const string UpdateInstallerAssetName = "DayScribeSetup.exe";
 
     private readonly LocalNoteStore _store = new();
     private readonly ProjectCalApiClient _api = new();
@@ -3093,13 +3093,13 @@ public sealed partial class MainPage : Page
             }
 
             var downloadUrl = result.InstallerDownloadUrl ?? await GetLatestInstallerDownloadUrlAsync();
-            var updateDirectory = Path.Combine(Path.GetTempPath(), "NotesMuchachos", "Updates");
+            var updateDirectory = Path.Combine(Path.GetTempPath(), "DayScribe", "Updates");
             Directory.CreateDirectory(updateDirectory);
 
             var remoteSuffix = ShortSha(result.RemoteSha);
             var fileName = string.Equals(remoteSuffix, "unknown", StringComparison.OrdinalIgnoreCase)
                 ? UpdateInstallerAssetName
-                : $"NotesMuchachosSetup-{remoteSuffix}.exe";
+                : $"DayScribeSetup-{remoteSuffix}.exe";
             var installerPath = Path.Combine(updateDirectory, fileName);
 
             using (var request = CreateGitHubRequest(downloadUrl))
@@ -3167,7 +3167,7 @@ public sealed partial class MainPage : Page
     private static HttpRequestMessage CreateGitHubRequest(string url)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("NotesMuchachos", "1.0"));
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("DayScribe", "1.0"));
         return request;
     }
 
@@ -3638,14 +3638,14 @@ public sealed partial class MainPage : Page
                 "checkUpdates" => "\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f",
                 "installUpdate" => "\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435",
                 "startupUpdateTitle" => "\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u043e \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435",
-                "startupUpdateBody" => "\u041d\u0430 GitHub \u0435\u0441\u0442\u044c \u043d\u043e\u0432\u0430\u044f \u0441\u0431\u043e\u0440\u043a\u0430 NotesMuchachos. \u041c\u043e\u0436\u043d\u043e \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u0438 \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0435\u0451 \u0441\u0435\u0439\u0447\u0430\u0441.",
+                "startupUpdateBody" => "\u041d\u0430 GitHub \u0435\u0441\u0442\u044c \u043d\u043e\u0432\u0430\u044f \u0441\u0431\u043e\u0440\u043a\u0430 DayScribe. \u041c\u043e\u0436\u043d\u043e \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u0438 \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u0435\u0451 \u0441\u0435\u0439\u0447\u0430\u0441.",
                 "later" => "\u041f\u043e\u0437\u0436\u0435",
                 "updateNotChecked" => "\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0435\u0449\u0451 \u043d\u0435 \u0437\u0430\u043f\u0443\u0441\u043a\u0430\u043b\u0430\u0441\u044c.",
                 "checkingUpdates" => "\u041f\u0440\u043e\u0432\u0435\u0440\u044f\u044e GitHub...",
                 "downloadingUpdate" => "\u0421\u043a\u0430\u0447\u0438\u0432\u0430\u044e \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435...",
                 "installerStarted" => "\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0449\u0438\u043a \u0437\u0430\u043f\u0443\u0449\u0435\u043d. \u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u0441\u0435\u0439\u0447\u0430\u0441 \u0437\u0430\u043a\u0440\u043e\u0435\u0442\u0441\u044f.",
                 "updateInstallFailed" => "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435",
-                "installerAssetMissing" => "\u0412 GitHub Release \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d NotesMuchachosSetup.exe.",
+                "installerAssetMissing" => "\u0412 GitHub Release \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d DayScribeSetup.exe.",
                 "latestGithubVersion" => "\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u044f\u044f \u0432\u0435\u0440\u0441\u0438\u044f \u043d\u0430 GitHub",
                 "currentBuildUnknown" => "\u0422\u0435\u043a\u0443\u0449\u0438\u0439 \u043a\u043e\u043c\u043c\u0438\u0442 \u0441\u0431\u043e\u0440\u043a\u0438 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d.",
                 "appUpToDate" => "\u0412\u0435\u0440\u0441\u0438\u044f \u0430\u043a\u0442\u0443\u0430\u043b\u044c\u043d\u0430:",
@@ -3771,14 +3771,14 @@ public sealed partial class MainPage : Page
                 "checkUpdates" => "Check GitHub updates",
                 "installUpdate" => "Install update",
                 "startupUpdateTitle" => "Update available",
-                "startupUpdateBody" => "A newer NotesMuchachos build is available on GitHub. You can download and install it now.",
+                "startupUpdateBody" => "A newer DayScribe build is available on GitHub. You can download and install it now.",
                 "later" => "Later",
                 "updateNotChecked" => "Update check has not run yet.",
                 "checkingUpdates" => "Checking GitHub...",
                 "downloadingUpdate" => "Downloading update...",
                 "installerStarted" => "Installer started. The app will close now.",
                 "updateInstallFailed" => "Could not install update",
-                "installerAssetMissing" => "NotesMuchachosSetup.exe was not found in the GitHub Release.",
+                "installerAssetMissing" => "DayScribeSetup.exe was not found in the GitHub Release.",
                 "latestGithubVersion" => "Latest GitHub version",
                 "currentBuildUnknown" => "Current build commit was not found.",
                 "appUpToDate" => "App is up to date:",
@@ -4152,7 +4152,7 @@ public sealed partial class MainPage : Page
         }
         catch (UnauthorizedAccessException)
         {
-            StatusBox.Text = "Microphone access is blocked. Enable microphone permission for NotesMuchachos in Windows Settings.";
+            StatusBox.Text = "Microphone access is blocked. Enable microphone permission for DayScribe in Windows Settings.";
         }
         catch (Exception ex)
         {
@@ -4178,7 +4178,7 @@ public sealed partial class MainPage : Page
     {
         AuthScreen.Visibility = Visibility.Collapsed;
         AppShell.Visibility = Visibility.Visible;
-        UserLabel.Text = _api.CurrentUser?.Email ?? "Calendar-first notes";
+        UserLabel.Text = _api.CurrentUser?.Email ?? "Calendar-first notes and voice";
         StatusBox.Text = status;
         SyncStateText.Text = _api.IsSignedIn ? T("ready") : T("offline");
         _ = CheckForUpdatesOnStartupAsync();

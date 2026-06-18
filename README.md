@@ -1,4 +1,4 @@
-# NotesMuchachos
+# DayScribe
 
 Native Windows notes app with registration, voice/audio transcription, photo attachments, day/hour calendar, offline-first SQLite storage, and a sync backend.
 
@@ -48,7 +48,7 @@ The API sends uploaded audio to Groq's OpenAI-compatible transcription endpoint.
 
 ## Supabase Postgres
 
-NotesMuchachos can use Supabase as its Postgres database. Get the connection string from:
+DayScribe can use Supabase as its Postgres database. Get the connection string from:
 
 Supabase dashboard -> Project Settings -> Database -> Connection string.
 
@@ -69,7 +69,7 @@ Render uses port `10000` by default for Docker web services. The API Dockerfile 
 
 For the full cloud sync checklist, see [`docs/CLOUD_SETUP.md`](docs/CLOUD_SETUP.md).
 For Oracle Cloud Always Free deployment, see [`docs/ORACLE_ALWAYS_FREE.md`](docs/ORACLE_ALWAYS_FREE.md).
-The Windows client must point to the deployed `ProjectCal.Api` backend, not directly to Supabase. For a private test build, set the hidden Windows environment variable `PROJECTCAL_API_URL` to the Render API URL before launching NotesMuchachos.
+The Windows client must point to the deployed `ProjectCal.Api` backend, not directly to Supabase. For a private test build, set the hidden Windows environment variable `PROJECTCAL_API_URL` to the Render API URL before launching DayScribe.
 
 ## GitHub
 
@@ -79,7 +79,7 @@ After installing Git and creating an empty GitHub repository:
 ```powershell
 git init
 git add .
-git commit -m "Initial NotesMuchachos app"
+git commit -m "Initial DayScribe app"
 git branch -M main
 git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
 git push -u origin main
@@ -89,7 +89,7 @@ The development auth endpoints return email confirmation and password reset toke
 
 ## Windows EXE installer
 
-For users: download `NotesMuchachosSetup.exe` from the latest GitHub Release and run it. The app connects to the managed NotesMuchachos cloud API automatically.
+For users: download `DayScribeSetup.exe` from the latest GitHub Release and run it. The app connects to the managed DayScribe cloud API automatically.
 
 This branch can build a traditional Windows installer:
 
@@ -100,10 +100,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build\Build-ExeInstaller.p
 The output is:
 
 ```text
-artifacts\installer\output\NotesMuchachosSetup.exe
+artifacts\installer\output\DayScribeSetup.exe
 ```
 
-GitHub Actions also includes `NotesMuchachos Installer`, which builds the setup executable as an artifact. Pushing a `v*` tag creates a GitHub Release with `NotesMuchachosSetup.exe`.
+GitHub Actions also includes `DayScribe Installer`, which builds the setup executable as an artifact. Pushing a `v*` tag creates a GitHub Release with `DayScribeSetup.exe`.
 
 ## Current MVP Behavior
 

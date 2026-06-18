@@ -1,4 +1,4 @@
-name: NotesMuchachos CI
+name: DayScribe CI
 
 on:
   push:
